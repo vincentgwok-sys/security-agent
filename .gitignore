@@ -1,23 +1,36 @@
-.claude/commands/opsx/apply.md
-.claude/commands/opsx/archive.md
-.claude/commands/opsx/bulk-archive.md
-.claude/commands/opsx/continue.md
-.claude/commands/opsx/explore.md
-.claude/commands/opsx/ff.md
-.claude/commands/opsx/new.md
-.claude/commands/opsx/onboard.md
-.claude/commands/opsx/sync.md
-.claude/commands/opsx/verify.md
-.claude/skills/openspec-apply-change/SKILL.md
-.claude/skills/openspec-archive-change/SKILL.md
-.claude/skills/openspec-bulk-archive-change/SKILL.md
-.claude/skills/openspec-continue-change/SKILL.md
-.claude/skills/openspec-explore/SKILL.md
-.claude/skills/openspec-ff-change/SKILL.md
-.claude/skills/openspec-new-change/SKILL.md
-.claude/skills/openspec-onboard/SKILL.md
-.claude/skills/openspec-sync-specs/SKILL.md
-.claude/skills/openspec-verify-change/SKILL.md
+# ── Maven / Java ──
+**/target/
+*.class
+*.jar
+*.war
+
+# ── Node / npm ──
+**/node_modules/
+**/dist/
+npm-debug.log*
+
+# ── IDE ──
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+
+# ── Runtime data ──
+**/logs/
+**/reports/
+
+# ── PID files ──
+*.pid
+.backend.pid
+.frontend.pid
+
+# ── OpenSpec ──
+.claude
 openspec/config.yaml
-openspec/changes/container-security-agent/.openspec.yaml
-container-security-agent\target
+openspec/changes/**/.openspec.yaml
