@@ -20,3 +20,4 @@
 .claude/skills/openspec-verify-change/SKILL.md
 openspec/config.yaml
 openspec/changes/container-security-agent/.openspec.yaml
+container-security-agent\target

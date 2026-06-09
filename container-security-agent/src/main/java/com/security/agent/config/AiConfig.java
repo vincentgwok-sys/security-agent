@@ -1,5 +1,8 @@
 package com.security.agent.config;
 
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -15,20 +18,41 @@ public class AiConfig {
     @Value("${spring.ai.openai.base-url:https://api.openai.com}")
     private String baseUrl;
 
-    /**
-     * 显式创建 OpenAiApi Bean，确保 base-url 中包含 /v1 路径。
-     * DeepSeek 的 OpenAI 兼容端点: https://api.deepseek.com/v1/chat/completions
-     * <p>
-     * 使用 @Primary 覆盖 Spring AI 自动配置中的默认 Bean，
-     * 但保留 OpenAiChatModel 和 ChatClient 的自动配置（读取 yml 中的 model/temperature 等）。
-     */
+    @Value("${spring.ai.openai.chat.options.model:deepseek-v4-pro}")
+    private String model;
+
+    @Value("${spring.ai.openai.chat.options.temperature:0.1}")
+    private Double temperature;
+
     @Bean
     @Primary
     public OpenAiApi openAiApi() {
+        // DeepSeek 端点: https://api.deepseek.com/v1/chat/completions
         String url = baseUrl;
         if (!url.endsWith("/v1")) {
             url = url + "/v1";
         }
         return new OpenAiApi(url, apiKey);
+    }
+
+    @Bean
+    @Primary
+    public OpenAiChatOptions openAiChatOptions() {
+        OpenAiChatOptions options = new OpenAiChatOptions();
+        options.setModel(model);
+        options.setTemperature(temperature);
+        return options;
+    }
+
+    @Bean
+    @Primary
+    public OpenAiChatModel openAiChatModel(OpenAiApi api, OpenAiChatOptions options) {
+        return new OpenAiChatModel(api, options);
+    }
+
+    @Bean
+    @Primary
+    public ChatClient chatClient(OpenAiChatModel chatModel) {
+        return ChatClient.builder(chatModel).build();
     }
 }

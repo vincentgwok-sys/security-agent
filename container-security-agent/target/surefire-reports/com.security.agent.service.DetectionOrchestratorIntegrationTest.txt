@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: com.security.agent.service.DetectionOrchestratorIntegrationTest
--------------------------------------------------------------------------------
-Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.522 s -- in com.security.agent.service.DetectionOrchestratorIntegrationTest

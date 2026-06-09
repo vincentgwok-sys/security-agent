@@ -1,12 +1,20 @@
 Write-Host "Stopping dev environment..." -ForegroundColor Yellow
 
-Get-Job -Name "cs-backend", "cs-frontend" -ErrorAction SilentlyContinue | Stop-Job -PassThru | Remove-Job
-Write-Host "  Jobs removed"
+# Kill by PID file
+foreach ($f in @("$PSScriptRoot\.backend.pid", "$PSScriptRoot\.frontend.pid")) {
+    if (Test-Path $f) {
+        $id = Get-Content $f
+        Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
+        Remove-Item $f -ErrorAction SilentlyContinue
+        Write-Host "  Stopped PID $id"
+    }
+}
 
-$procIds = Get-NetTCPConnection -LocalPort 8080, 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
-foreach ($procId in $procIds) {
+# Fallback: kill by port
+$procs = Get-NetTCPConnection -LocalPort 8080, 5173 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+foreach ($procId in $procs) {
     Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
-    Write-Host "  Stopped PID $procId"
+    Write-Host "  Stopped port process PID $procId"
 }
 
 Write-Host "Done" -ForegroundColor Green
