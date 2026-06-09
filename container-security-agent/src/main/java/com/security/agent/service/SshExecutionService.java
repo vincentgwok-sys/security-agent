@@ -14,6 +14,9 @@ import org.springframework.stereotype.Service;
 import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
+import java.net.ConnectException;
+import java.net.SocketException;
+import java.nio.channels.UnresolvedAddressException;
 import java.nio.charset.StandardCharsets;
 import java.util.EnumSet;
 import java.util.Map;
@@ -85,6 +88,7 @@ public class SshExecutionService implements AutoCloseable {
                     .stderr("SSH 执行异常: " + e.getMessage())
                     .exitCode(-1)
                     .blocked(false)
+                    .connectionError(isConnectionException(e))
                     .build();
         }
         // Session is NOT closed here — it's pooled for reuse
@@ -163,6 +167,7 @@ public class SshExecutionService implements AutoCloseable {
                     .stdout("")
                     .stderr("SSH 执行异常: " + e.getMessage())
                     .exitCode(-1)
+                    .connectionError(isConnectionException(e))
                     .build();
         }
     }
@@ -176,6 +181,27 @@ public class SshExecutionService implements AutoCloseable {
             return false;
         });
         log.info("SSH 连接已释放: {}", hostPort);
+    }
+
+    /**
+     * 检查异常链中是否包含 SSH 连接级别的异常（区别于命令执行超时等非连接问题）。
+     */
+    private boolean isConnectionException(Throwable t) {
+        Throwable current = t;
+        while (current != null) {
+            if (current instanceof ConnectException
+                    || current instanceof UnresolvedAddressException
+                    || current instanceof SocketException) {
+                return true;
+            }
+            // SSHD 的 SshException 通常也是连接/认证问题
+            if (current.getClass().getName().startsWith("org.apache.sshd")
+                    && current instanceof IOException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private void closeQuietly(ClientSession session) {

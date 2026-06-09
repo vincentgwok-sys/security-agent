@@ -33,7 +33,8 @@
               <div class="context-header">
                 <strong>{{ ctx.contextId }}</strong>
                 <span v-if="ctx.deprecated" class="deprecated-tag">已弃用</span>
-                <span v-if="ctx.evolvedFrom" class="evolved-tag">进化自: {{ ctx.evolvedFrom }}</span>
+                <span v-if="ctx.evolvedFrom === 'ai-generated'" class="evolved-tag">AI 进化生成</span>
+                <span v-else-if="ctx.evolvedFrom && skill.evolutionCount > 0" class="evolved-tag">进化自: {{ ctx.evolvedFrom }}</span>
               </div>
               <div v-if="ctx.environmentFingerprint" class="context-env">
                 <span class="env-chip">OS: {{ ctx.environmentFingerprint.osType }}</span>

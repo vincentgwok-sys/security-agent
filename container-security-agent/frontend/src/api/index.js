@@ -53,6 +53,15 @@ export function reloadSkills() {
   return api.post('/skills/reload')
 }
 
+// ========== Task actions ==========
+export function cancelTask(taskId) {
+  return api.post(`/tasks/${taskId}/cancel`)
+}
+
+export function deleteTask(taskId) {
+  return api.delete(`/tasks/${taskId}`)
+}
+
 // ========== Rules ==========
 export function getRules() {
   return api.get('/rules')

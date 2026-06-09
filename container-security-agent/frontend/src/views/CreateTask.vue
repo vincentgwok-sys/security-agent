@@ -1,7 +1,7 @@
 <template>
   <div>
     <h2 style="margin-bottom: 20px;">创建检测任务</h2>
-    <div class="card" style="max-width: 640px;">
+    <div class="card" style="max-width: 800px;">
       <form @submit.prevent="handleSubmit">
         <div class="form-group">
           <label>目标容器 IP *</label>
@@ -32,12 +32,13 @@
           </div>
           <div v-else class="skill-checkboxes">
             <label v-for="skill in skills" :key="skill.skillId" class="skill-checkbox">
-              <input type="checkbox" :value="skill.skillId" v-model="form.skillIds" />
-              <span class="skill-info">
-                <strong>{{ skill.skillName }}</strong>
-                <small>{{ skill.skillId }} · {{ skill.contextCount }} 个 Context</small>
+              <div class="skill-checkbox-top">
+                <input type="checkbox" :value="skill.skillId" v-model="form.skillIds" />
+                <span class="skill-name">{{ skill.skillName }}</span>
                 <RiskLevelTag :level="skill.riskLevel" />
-              </span>
+                <span class="skill-meta">{{ skill.skillId }} · {{ skill.contextCount }} 个 Context</span>
+              </div>
+              <p class="skill-desc-text">{{ skill.description }}</p>
             </label>
           </div>
         </div>
@@ -86,6 +87,8 @@ onMounted(async () => {
   try {
     const { data } = await listSkills()
     skills.value = data
+    // 默认全选所有 Skill
+    form.skillIds = data.map(s => s.skillId)
   } catch (e) {
     error.value = '加载 Skill 列表失败: ' + e.message
   } finally {
@@ -121,7 +124,7 @@ function resetForm() {
   form.sshPort = 22
   form.sshUser = 'root'
   form.sshPassword = ''
-  form.skillIds = []
+  form.skillIds = skills.value.map(s => s.skillId)
   createdTaskId.value = ''
   error.value = ''
 }
@@ -129,13 +132,14 @@ function resetForm() {
 
 <style scoped>
 .form-row { display: flex; gap: 12px; }
-.skill-checkboxes { display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto; }
-.skill-checkbox { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: all .2s; }
+.skill-checkboxes { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; }
+.skill-checkbox { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; transition: all .2s; }
 .skill-checkbox:hover { border-color: #93c5fd; background: #eff6ff; }
-.skill-checkbox input { margin-top: 3px; }
-.skill-info { display: flex; flex-direction: column; gap: 2px; }
-.skill-info strong { font-size: 14px; }
-.skill-info small { font-size: 12px; color: #6b7280; }
+.skill-checkbox-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.skill-checkbox-top input { flex-shrink: 0; margin: 0; }
+.skill-name { font-size: 14px; font-weight: 600; }
+.skill-meta { font-size: 12px; color: #9ca3af; }
+.skill-desc-text { font-size: 13px; color: #6b7280; line-height: 1.5; margin: 0; padding-left: 23px; }
 .success-msg { background: #f0fdf4; border: 1px solid #86efac; color: #166534; padding: 12px 16px; border-radius: 8px; font-size: 14px; }
 .success-msg a { color: #1d4ed8; }
 </style>

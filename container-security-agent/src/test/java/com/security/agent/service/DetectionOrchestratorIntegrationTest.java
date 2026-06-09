@@ -22,6 +22,7 @@ class DetectionOrchestratorIntegrationTest {
     private SshExecutionService mockSsh;
     private SkillLoaderService mockSkillLoader;
     private AiClientService mockAi;
+    private AiLogService mockAiLog;
     private ObjectMapper mapper;
 
     @BeforeEach
@@ -29,15 +30,20 @@ class DetectionOrchestratorIntegrationTest {
         mockSsh = mock(SshExecutionService.class);
         mockSkillLoader = mock(SkillLoaderService.class);
         mockAi = mock(AiClientService.class);
+        mockAiLog = mock(AiLogService.class);
         mapper = new ObjectMapper();
 
-        orchestrator = new DetectionOrchestrator(mockSsh, mockSkillLoader, mockAi);
+        orchestrator = new DetectionOrchestrator(mockSsh, mockSkillLoader, mockAi, mockAiLog);
 
         // Inject @Value fields since this is a non-Spring test
         try {
             Field maxEvolveField = DetectionOrchestrator.class.getDeclaredField("maxEvolveRounds");
             maxEvolveField.setAccessible(true);
             maxEvolveField.set(orchestrator, 5);
+
+            Field maxCtxField = DetectionOrchestrator.class.getDeclaredField("maxContextEvolutions");
+            maxCtxField.setAccessible(true);
+            maxCtxField.set(orchestrator, 3);
 
             Field cmdTimeoutField = DetectionOrchestrator.class.getDeclaredField("commandTimeout");
             cmdTimeoutField.setAccessible(true);

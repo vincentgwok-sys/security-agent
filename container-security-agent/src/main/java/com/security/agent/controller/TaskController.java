@@ -25,20 +25,24 @@ public class TaskController {
     private final SkillLoaderService skillLoader;
     private final DetectionOrchestrator orchestrator;
     private final ReportGenerationService reportService;
+    private final SshExecutionService sshService;
 
     public TaskController(TaskManagementService taskService,
                           SkillLoaderService skillLoader,
                           DetectionOrchestrator orchestrator,
-                          ReportGenerationService reportService) {
+                          ReportGenerationService reportService,
+                          SshExecutionService sshService) {
         this.taskService = taskService;
         this.skillLoader = skillLoader;
         this.orchestrator = orchestrator;
         this.reportService = reportService;
+        this.sshService = sshService;
     }
 
     @PostMapping
     public ResponseEntity<?> createTask(@Valid @RequestBody CreateTaskRequest request) {
-        log.info("收到创建任务请求: targetIp={}, skillIds={}", request.targetIp(), request.skillIds());
+        log.info("收到创建任务请求: targetIp={}, skillIds={}, parentTaskId={}",
+                request.targetIp(), request.skillIds(), request.parentTaskId());
 
         // Validate skills exist
         Map<String, SkillDefinition> skills = skillLoader.loadLatestSkills();
@@ -54,10 +58,11 @@ public class TaskController {
                 request.sshUser(),
                 request.sshPassword(),
                 request.sshPort() != null ? request.sshPort() : 22,
-                request.skillIds());
+                request.skillIds(),
+                request.parentTaskId());
 
         // Async launch detection
-        CompletableFuture.runAsync(() -> {
+        CompletableFuture<?> detectionFuture = CompletableFuture.runAsync(() -> {
             try {
                 taskService.updateStatus(task.getTaskId(), TaskStatus.RUNNING);
                 List<SkillDefinition> selectedSkills = request.skillIds().stream()
@@ -75,7 +80,9 @@ public class TaskController {
                 log.info("任务完成: {}, 报告已持久化", task.getTaskId());
             } catch (Exception e) {
                 log.error("任务执行失败: {}", task.getTaskId(), e);
-                taskService.updateStatus(task.getTaskId(), TaskStatus.FAILED, e.getMessage());
+                if (!(e instanceof InterruptedException || e.getCause() instanceof InterruptedException)) {
+                    taskService.updateStatus(task.getTaskId(), TaskStatus.FAILED, e.getMessage());
+                }
 
                 // Still persist whatever partial results we have
                 try {
@@ -85,6 +92,9 @@ public class TaskController {
                 } catch (Exception ignored) {}
             }
         });
+
+        // Register for cancellation
+        taskService.registerRunningTask(task.getTaskId(), detectionFuture);
 
         return ResponseEntity.accepted()
                 .body(Map.of("taskId", task.getTaskId(), "status", task.getStatus().name()));
@@ -134,10 +144,47 @@ public class TaskController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @PostMapping("/{taskId}/cancel")
+    public ResponseEntity<?> cancelTask(@PathVariable String taskId) {
+        var task = taskService.getTask(taskId);
+        if (task.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        TaskStatus status = task.get().getStatus();
+        if (status != TaskStatus.RUNNING && status != TaskStatus.CREATED) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "只有运行中或等待中的任务才能终止"));
+        }
+        taskService.cancelTask(taskId);
+        // Release SSH sessions for the target host
+        try {
+            sshService.release(task.get().getTargetIp() + ":" + task.get().getSshPort());
+        } catch (Exception ignored) {}
+        log.info("用户请求终止任务: {}", taskId);
+        return ResponseEntity.ok(Map.of("taskId", taskId, "status", "INTERRUPTED"));
+    }
+
+    @DeleteMapping("/{taskId}")
+    public ResponseEntity<?> deleteTask(@PathVariable String taskId) {
+        var task = taskService.getTask(taskId);
+        if (task.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        TaskStatus status = task.get().getStatus();
+        if (status == TaskStatus.RUNNING) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "运行中的任务无法删除，请先终止"));
+        }
+        taskService.deleteTask(taskId);
+        log.info("用户请求删除任务: {}", taskId);
+        return ResponseEntity.ok(Map.of("taskId", taskId, "deleted", true));
+    }
+
     public record CreateTaskRequest(
             @NotBlank String targetIp,
             @NotBlank String sshUser,
             @NotBlank String sshPassword,
             Integer sshPort,
-            @NotEmpty List<String> skillIds) {}
+            @NotEmpty List<String> skillIds,
+            String parentTaskId) {}
 }

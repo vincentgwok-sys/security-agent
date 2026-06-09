@@ -169,7 +169,6 @@ public class SkillLoaderService {
     public SkillDefinition saveEvolvedSkill(SkillDefinition base) {
         long newTs = System.currentTimeMillis();
         base.setVersionTimestamp(newTs);
-        base.setEvolutionCount(base.getEvolutionCount() + 1);
 
         String fileName = base.getSkillId() + "-" + newTs + ".json";
         Path targetPath = Path.of(skillsDir, fileName);

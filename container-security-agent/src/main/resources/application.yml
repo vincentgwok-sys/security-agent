@@ -29,6 +29,7 @@ security-agent:
     directory: ${LOGS_DIR:./logs}
   detection:
     max-evolve-rounds: 5
+    max-context-evolutions: 3
     command-timeout-seconds: 30
 
 logging:

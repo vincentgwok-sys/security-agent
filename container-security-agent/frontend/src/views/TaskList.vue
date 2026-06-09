@@ -34,13 +34,34 @@
                 <router-link :to="`/report/${task.taskId}`" class="btn btn-sm btn-success" v-if="task.status === 'COMPLETED'">
                   查看报告
                 </router-link>
-                <span v-else class="btn btn-sm btn-secondary" style="cursor: default; opacity: .6;">
-                  {{ task.status === 'RUNNING' ? '检测中...' : '等待中' }}
+                <span v-else-if="task.status === 'RUNNING'" class="btn btn-sm btn-secondary" style="cursor: default; opacity: .6;">
+                  检测中...
+                </span>
+                <span v-else-if="task.status === 'CREATED'" class="btn btn-sm btn-secondary" style="cursor: default; opacity: .6;">
+                  等待中
                 </span>
                 <router-link :to="`/logs/${task.taskId}`" class="btn btn-sm"
                   style="background: #6366f1; color: #fff;" v-if="task.status !== 'CREATED'">
                   查看日志
                 </router-link>
+                <button class="btn btn-sm" style="background: #dc2626; color: #fff;"
+                  v-if="task.status === 'RUNNING' || task.status === 'CREATED'"
+                  :disabled="cancelling === task.taskId"
+                  @click="cancelTask(task)">
+                  {{ cancelling === task.taskId ? '终止中...' : '终止' }}
+                </button>
+                <button class="btn btn-sm" style="background: #f59e0b; color: #fff;"
+                  v-if="(task.status === 'INTERRUPTED' || task.status === 'FAILED') && !isRetried(task.taskId)"
+                  :disabled="retrying === task.taskId"
+                  @click="retryTask(task)">
+                  {{ retrying === task.taskId ? '重试中...' : '重试' }}
+                </button>
+                <button class="btn btn-sm btn-secondary"
+                  v-if="task.status === 'COMPLETED' || task.status === 'INTERRUPTED' || task.status === 'FAILED'"
+                  :disabled="deleting === task.taskId"
+                  @click="removeTask(task)">
+                  {{ deleting === task.taskId ? '删除中...' : '删除' }}
+                </button>
               </div>
             </td>
           </tr>
@@ -62,13 +83,16 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { listTasks } from '../api'
+import { listTasks, getTask, createTask, cancelTask as apiCancelTask, deleteTask as apiDeleteTask } from '../api'
 import StatusBadge from '../components/StatusBadge.vue'
 
 const tasks = ref([])
 const loading = ref(true)
 const page = ref(0)
 const totalPages = ref(0)
+const retrying = ref(null)
+const cancelling = ref(null)
+const deleting = ref(null)
 
 async function fetchTasks() {
   loading.value = true
@@ -86,6 +110,60 @@ async function fetchTasks() {
 function refresh() {
   page.value = 0
   fetchTasks()
+}
+
+async function retryTask(task) {
+  if (!confirm(`确定要重试任务 ${task.taskId} 吗？将使用最新的 Skill 和规则重新检测。`)) return
+  retrying.value = task.taskId
+  try {
+    const { data: oldTask } = await getTask(task.taskId)
+    await createTask({
+      targetIp: oldTask.targetIp,
+      sshUser: oldTask.sshUser,
+      sshPassword: oldTask.sshPassword,
+      sshPort: oldTask.sshPort || 22,
+      skillIds: oldTask.skillIds,
+      parentTaskId: oldTask.taskId
+    })
+    fetchTasks()
+  } catch (e) {
+    console.error('重试任务失败', e)
+    alert('重试失败: ' + (e.response?.data?.error || e.message))
+  } finally {
+    retrying.value = null
+  }
+}
+
+function isRetried(taskId) {
+  return tasks.value.some(t => t.parentTaskId === taskId)
+}
+
+async function cancelTask(task) {
+  if (!confirm(`确定要终止任务 ${task.taskId} 吗？`)) return
+  cancelling.value = task.taskId
+  try {
+    await apiCancelTask(task.taskId)
+    fetchTasks()
+  } catch (e) {
+    console.error('终止任务失败', e)
+    alert('终止失败: ' + (e.response?.data?.error || e.message))
+  } finally {
+    cancelling.value = null
+  }
+}
+
+async function removeTask(task) {
+  if (!confirm(`确定要删除任务 ${task.taskId} 吗？\n（日志和报告将保留）`)) return
+  deleting.value = task.taskId
+  try {
+    await apiDeleteTask(task.taskId)
+    fetchTasks()
+  } catch (e) {
+    console.error('删除任务失败', e)
+    alert('删除失败: ' + (e.response?.data?.error || e.message))
+  } finally {
+    deleting.value = null
+  }
 }
 
 function formatTime(dateStr) {

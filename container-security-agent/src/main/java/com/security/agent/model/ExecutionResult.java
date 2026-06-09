@@ -18,7 +18,14 @@ public class ExecutionResult {
     @Builder.Default
     private boolean blocked = false;
 
+    @Builder.Default
+    private boolean connectionError = false;
+
     public boolean isBlocked() {
         return blocked;
+    }
+
+    public boolean isConnectionError() {
+        return connectionError;
     }
 }

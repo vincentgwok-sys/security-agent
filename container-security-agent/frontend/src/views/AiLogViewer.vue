@@ -119,14 +119,16 @@ function toggle(logId) {
 function phaseColor(phase) {
   return {
     phase0: '#3b82f6', phase1: '#22c55e', 'context-evolution': '#8b5cf6',
-    phase2: '#f59e0b', 'json-repair': '#eab308'
+    phase2: '#f59e0b', 'json-repair': '#eab308',
+    'ssh-connection-error': '#dc2626'
   }[phase] || '#9ca3af'
 }
 
 function phaseLabel(phase) {
   return {
     phase0: '阶段零·匹配', phase1: '阶段一·判定', 'context-evolution': '上下文进化',
-    phase2: '阶段二·报告', 'json-repair': 'JSON 修复'
+    phase2: '阶段二·报告', 'json-repair': 'JSON 修复',
+    'ssh-connection-error': 'SSH 连接失败'
   }[phase] || phase
 }
 

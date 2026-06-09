@@ -31,6 +31,7 @@ public class TaskManagementService {
 
     private final ObjectMapper objectMapper;
     private final Map<String, DetectionTask> taskStore = new ConcurrentHashMap<>();
+    private final Map<String, java.util.concurrent.CompletableFuture<?>> runningFutures = new ConcurrentHashMap<>();
     private final AtomicInteger dailySeq = new AtomicInteger(0);
     private volatile String currentDate = "";
     private Path reportsDir;
@@ -61,9 +62,18 @@ public class TaskManagementService {
                     .toList();
 
             int loaded = 0;
+            int interrupted = 0;
             for (Path file : taskFiles) {
                 try {
                     DetectionTask task = objectMapper.readValue(file.toFile(), DetectionTask.class);
+                    // 服务重启后，未完成的任务标记为中断
+                    if (task.getStatus() == TaskStatus.RUNNING || task.getStatus() == TaskStatus.CREATED) {
+                        task.setStatus(TaskStatus.INTERRUPTED);
+                        task.setErrorMessage("服务重启，检测中断");
+                        task.setUpdatedAt(LocalDateTime.now());
+                        persistTask(task);
+                        interrupted++;
+                    }
                     taskStore.put(task.getTaskId(), task);
                     loaded++;
                 } catch (IOException e) {
@@ -80,7 +90,7 @@ public class TaskManagementService {
             dailySeq.set((int) todayCount);
             currentDate = today;
 
-            log.info("从磁盘恢复 {} 个历史任务 (今天已有 {} 个)", loaded, todayCount);
+            log.info("从磁盘恢复 {} 个历史任务 (今天已有 {} 个, 标记中断 {} 个)", loaded, todayCount, interrupted);
         } catch (IOException e) {
             log.error("Reports 目录扫描失败: {}", reportsDir, e);
         }
@@ -104,7 +114,7 @@ public class TaskManagementService {
      * 创建检测任务，立即持久化到磁盘。
      */
     public DetectionTask createTask(String targetIp, String sshUser, String sshPassword,
-                                    int sshPort, List<String> skillIds) {
+                                    int sshPort, List<String> skillIds, String parentTaskId) {
         String taskId = generateTaskId();
         DetectionTask task = DetectionTask.builder()
                 .taskId(taskId)
@@ -116,6 +126,7 @@ public class TaskManagementService {
                 .status(TaskStatus.CREATED)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
+                .parentTaskId(parentTaskId)
                 .build();
 
         taskStore.put(taskId, task);
@@ -193,6 +204,53 @@ public class TaskManagementService {
                 .sorted(Comparator.comparing(DetectionTask::getCreatedAt,
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .collect(Collectors.toList());
+    }
+
+    // ──── Lifecycle ────
+
+    /**
+     * Register a running task's CompletableFuture for cancellation.
+     */
+    public void registerRunningTask(String taskId, java.util.concurrent.CompletableFuture<?> future) {
+        runningFutures.put(taskId, future);
+    }
+
+    /**
+     * Cancel a running task. Triggers future.cancel(true) which sends interrupt
+     * to the worker thread, updates status to INTERRUPTED, and releases tracking.
+     */
+    public void cancelTask(String taskId) {
+        DetectionTask task = taskStore.get(taskId);
+        if (task == null) return;
+
+        java.util.concurrent.CompletableFuture<?> future = runningFutures.remove(taskId);
+        if (future != null) {
+            future.cancel(true);
+        }
+
+        task.setStatus(TaskStatus.INTERRUPTED);
+        task.setErrorMessage("用户手动终止");
+        task.setUpdatedAt(LocalDateTime.now());
+        persistTask(task);
+        log.info("任务已终止: {}", taskId);
+    }
+
+    /**
+     * Delete a non-running task from the store and its .task.json file.
+     * Logs and reports under logs/{taskId}/ and reports/{taskId}.json are preserved.
+     */
+    public void deleteTask(String taskId) {
+        DetectionTask task = taskStore.remove(taskId);
+        if (task == null) return;
+
+        // Delete the .task.json metadata file only — logs and reports stay
+        Path filePath = reportsDir.resolve(taskId + ".task.json");
+        try {
+            Files.deleteIfExists(filePath);
+            log.info("任务已删除: {} (日志和报告已保留)", taskId);
+        } catch (IOException e) {
+            log.error("任务文件删除失败: {} — {}", taskId, e.getMessage(), e);
+        }
     }
 
     // ──── Persistence ────

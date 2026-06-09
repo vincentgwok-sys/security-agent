@@ -21,20 +21,26 @@ public class DetectionOrchestrator {
     @Value("${security-agent.detection.max-evolve-rounds:5}")
     private int maxEvolveRounds;
 
+    @Value("${security-agent.detection.max-context-evolutions:3}")
+    private int maxContextEvolutions;
+
     @Value("${security-agent.detection.command-timeout-seconds:30}")
     private int commandTimeout;
 
     private final SshExecutionService sshService;
     private final SkillLoaderService skillLoader;
     private final AiClientService aiClient;
+    private final AiLogService aiLogService;
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
 
     public DetectionOrchestrator(SshExecutionService sshService,
                                   SkillLoaderService skillLoader,
-                                  AiClientService aiClient) {
+                                  AiClientService aiClient,
+                                  AiLogService aiLogService) {
         this.sshService = sshService;
         this.skillLoader = skillLoader;
         this.aiClient = aiClient;
+        this.aiLogService = aiLogService;
     }
 
     /**
@@ -97,6 +103,7 @@ public class DetectionOrchestrator {
         List<ExecutionRecord> records = new ArrayList<>();
         String finalStatus = "PASS";
         boolean commandEvolved = false;
+        int contextEvolutionCount = 0;
 
         List<String> commands = activeContext.getExecutionLogic() != null
                 && activeContext.getExecutionLogic().getDetectionCommands() != null
@@ -110,6 +117,12 @@ public class DetectionOrchestrator {
             String currentCommand = command;
 
             while (round < maxEvolveRounds) {
+                // Check for cancellation
+                if (Thread.currentThread().isInterrupted()) {
+                    log.warn("[{}] 检测被中断，终止执行", skillId);
+                    throw new RuntimeException("检测已取消", new InterruptedException("任务已终止"));
+                }
+
                 log.info("[{}] 执行命令 [{}/{}] round={}: {}",
                         skillId, cmdIndex + 1, commands.size(), round, currentCommand);
 
@@ -173,7 +186,22 @@ public class DetectionOrchestrator {
                         continue;
 
                     case "ENV_MISMATCH":
-                        log.warn("[{}] Context {} 环境不匹配，重新进化", skillId, activeContext.getContextId());
+                        // 优先检查 SSH 连接是否已达 —— 连接失败时进化无效
+                        if (result.isConnectionError()) {
+                            log.error("[{}] SSH 连接不可达 ({}:{}), 终止检测",
+                                    skillId, ip, port);
+                            return buildConnectionFailedReport(skill, result, task.getTaskId());
+                        }
+                        // 检查上下文进化次数是否已达上限
+                        contextEvolutionCount++;
+                        if (contextEvolutionCount > maxContextEvolutions) {
+                            log.error("[{}] 上下文进化次数已达上限 ({}), 终止检测",
+                                    skillId, maxContextEvolutions);
+                            return buildContextEvolutionLimitReport(skill, maxContextEvolutions, task.getTaskId());
+                        }
+                        log.warn("[{}] Context {} 环境不匹配，重新进化 ({}/{})",
+                                skillId, activeContext.getContextId(),
+                                contextEvolutionCount, maxContextEvolutions);
                         ExecutionContext newCtx = evolveNewContext(skill, targetEnv, ip, port, user, pwd, task.getTaskId());
                         if (newCtx == null) break;
                         activeContext = newCtx;
@@ -274,6 +302,92 @@ public class DetectionOrchestrator {
                 .executionRecords(records)
                 .testReport(aiReport != null ? aiReport.getTestReport() : null)
                 .securityRemediation(aiReport != null ? aiReport.getSecurityRemediation() : null)
+                .build();
+    }
+
+    private SkillReport buildConnectionFailedReport(SkillDefinition skill,
+                                                     ExecutionResult result, String taskId) {
+        String errorDetail = result.getStderr();
+        log.error("[{}] SSH 连接失败: {}", skill.getSkillId(), errorDetail);
+
+        // 记录 AI 日志，标记连接失败
+        aiLogService.log(new AiLogEntry(
+                java.util.UUID.randomUUID().toString(),
+                taskId,
+                skill.getSkillId(),
+                "ssh-connection-error",
+                null,
+                null,
+                errorDetail,
+                null,
+                "FAILED",
+                null,
+                0L,
+                System.currentTimeMillis()));
+
+        return SkillReport.builder()
+                .skillId(skill.getSkillId())
+                .skillName(skill.getSkillName())
+                .finalStatus("FAIL")
+                .usedContextId("none")
+                .contextEnvironment("SSH 连接失败")
+                .evolutionType("none")
+                .isEvolved(false)
+                .executionRecords(Collections.emptyList())
+                .testReport(AiReportResponse.TestReport.builder()
+                        .summary("无法连接到目标容器: " + errorDetail)
+                        .riskLevel("HIGH")
+                        .evidence(errorDetail)
+                        .affectedEnvironment("unknown")
+                        .build())
+                .securityRemediation(AiReportResponse.SecurityRemediation.builder()
+                        .strategy("检查目标容器 IP 和端口是否正确，确认 SSH 服务可访问")
+                        .k8sYamlPatch("")
+                        .alternativeAdvice("确认网络可达后重试检测")
+                        .environmentSpecificNotes("SSH 地址不可达或连接被拒绝")
+                        .build())
+                .build();
+    }
+
+    private SkillReport buildContextEvolutionLimitReport(SkillDefinition skill,
+                                                          int maxEvolutions, String taskId) {
+        log.warn("[{}] 上下文进化已达上限 ({}), 终止检测", skill.getSkillId(), maxEvolutions);
+
+        aiLogService.log(new AiLogEntry(
+                java.util.UUID.randomUUID().toString(),
+                taskId,
+                skill.getSkillId(),
+                "ssh-connection-error",
+                null,
+                null,
+                "上下文进化次数已达上限: " + maxEvolutions,
+                null,
+                "FAILED",
+                null,
+                0L,
+                System.currentTimeMillis()));
+
+        return SkillReport.builder()
+                .skillId(skill.getSkillId())
+                .skillName(skill.getSkillName())
+                .finalStatus("FAIL")
+                .usedContextId("none")
+                .contextEnvironment("上下文进化次数耗尽")
+                .evolutionType("none")
+                .isEvolved(false)
+                .executionRecords(Collections.emptyList())
+                .testReport(AiReportResponse.TestReport.builder()
+                        .summary("上下文进化已达最大次数 (" + maxEvolutions + "), 无法找到适配的执行上下文")
+                        .riskLevel("HIGH")
+                        .evidence("目标环境信息缺失，AI 无法生成有效执行上下文")
+                        .affectedEnvironment("unknown")
+                        .build())
+                .securityRemediation(AiReportResponse.SecurityRemediation.builder()
+                        .strategy("检查目标环境 SSH 可达性，或手动编写适用于该环境的 executionContext")
+                        .k8sYamlPatch("")
+                        .alternativeAdvice("")
+                        .environmentSpecificNotes("")
+                        .build())
                 .build();
     }
 

@@ -24,4 +24,5 @@ public class DetectionTask {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String errorMessage;
+    private String parentTaskId;
 }
