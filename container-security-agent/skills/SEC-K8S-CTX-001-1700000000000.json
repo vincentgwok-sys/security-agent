@@ -1,0 +1,108 @@
+{
+  "skillId": "SEC-K8S-CTX-001",
+  "skillName": "权限与隔离突破",
+  "versionTimestamp": 1700000000000,
+  "riskLevel": "CRITICAL",
+  "description": "检测容器是否以 --privileged 模式运行，或者在其 securityContext 中被赋予了 CAP_SYS_ADMIN、CAP_SYS_PTRACE 等高危权限，从而评估其逃逸风险。",
+  "evolutionCount": 0,
+  "reportMetadata": {
+    "remediationFocus": "重点针对 Kubernetes Pod/Container 的 securityContext 进行加固，指导开发人员 drop ALL capabilities 并禁用特权模式。"
+  },
+  "executionContexts": [
+    {
+      "contextId": "linux-debian-ubuntu-standard",
+      "environmentFingerprint": {
+        "osType": "linux",
+        "osFlavors": ["debian", "ubuntu"],
+        "shellType": "bash",
+        "requiredTools": ["capsh", "cat", "mount", "grep"],
+        "optionalTools": ["getfattr", "attr"],
+        "minKernelVersion": "3.10.0",
+        "arch": ["amd64", "arm64"]
+      },
+      "envCheckCommands": [
+        "uname -s",
+        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
+        "which capsh cat mount grep 2>/dev/null",
+        "echo $SHELL",
+        "uname -r",
+        "uname -m"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "如果容器安全隔离正常，任何特权操作或高危工具调用应被拒绝（如 Operation not permitted），且进程的 CapEff 掩码不应包含特权位。",
+        "detectionCommands": [
+          "capsh --print 2>&1",
+          "cat /proc/1/status | grep CapEff",
+          "mount -t tmpfs none /tmp/test_mount 2>&1",
+          "cat /proc/1/status | grep -E '^Seccomp:'"
+        ]
+      },
+      "evolvedFrom": null,
+      "evolvedAt": null,
+      "deprecated": false
+    },
+    {
+      "contextId": "linux-alpine-busybox",
+      "environmentFingerprint": {
+        "osType": "linux",
+        "osFlavors": ["alpine"],
+        "shellType": "ash",
+        "requiredTools": ["cat", "grep", "mount"],
+        "optionalTools": [],
+        "minKernelVersion": "3.10.0",
+        "arch": ["amd64", "arm64"]
+      },
+      "envCheckCommands": [
+        "uname -s",
+        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
+        "which cat grep mount 2>/dev/null",
+        "echo $SHELL",
+        "uname -r",
+        "uname -m"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "与 Debian 环境一致：特权操作应被拒绝，进程 CapEff 掩码不应含特权位。Alpine 中无 capsh，需用其他方式检测。",
+        "detectionCommands": [
+          "cat /proc/1/status | grep CapEff",
+          "cat /proc/1/status | grep -E '^Seccomp:'",
+          "mount 2>&1 | grep -E '(proc|sys|tmpfs)'",
+          "cat /proc/self/mounts | grep -E '/proc|/sys' | head -5"
+        ]
+      },
+      "evolvedFrom": "linux-debian-ubuntu-standard",
+      "evolvedAt": null,
+      "deprecated": false
+    },
+    {
+      "contextId": "windows-servercore-default",
+      "environmentFingerprint": {
+        "osType": "windows",
+        "osFlavors": ["windows-servercore", "windows-nanoserver"],
+        "shellType": "powershell",
+        "requiredTools": ["powershell.exe", "whoami.exe", "reg.exe"],
+        "optionalTools": ["docker.exe"],
+        "minKernelVersion": "10.0.17763",
+        "arch": ["amd64"]
+      },
+      "envCheckCommands": [
+        "ver",
+        "powershell.exe -Command \"$env:OS\"",
+        "powershell.exe -Command \"(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').ProductName\"",
+        "where powershell.exe whoami.exe reg.exe 2>nul",
+        "powershell.exe -Command \"[Environment]::Is64BitOperatingSystem\""
+      ],
+      "executionLogic": {
+        "expectedBehavior": "Windows 容器应运行在进程隔离模式下（非 Hyper-V），安全配置应从注册表和进程令牌验证。容器内用户不应具有 SeDebugPrivilege 或 SeTakeOwnershipPrivilege 等特权。",
+        "detectionCommands": [
+          "whoami /all 2>&1",
+          "powershell.exe -Command \"Get-Process -IncludeUserName | Select-Object -First 10 | Format-List\"",
+          "powershell.exe -Command \"whoami /priv | findstr /I 'SeDebugPrivilege SeTakeOwnershipPrivilege SeRestorePrivilege SeBackupPrivilege'\"",
+          "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Isolation\" 2>&1"
+        ]
+      },
+      "evolvedFrom": null,
+      "evolvedAt": null,
+      "deprecated": false
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "taskId" : "TASK-20260609-0002",
+  "targetIp" : "127.0.0.1",
+  "sshUser" : "root",
+  "sshPassword" : "1",
+  "sshPort" : 22,
+  "skillIds" : [ "SEC-K8S-CTX-003" ],
+  "status" : "COMPLETED",
+  "createdAt" : "2026-06-09T15:16:32.3160747",
+  "updatedAt" : "2026-06-09T15:17:18.5696952",
+  "errorMessage" : null
+}

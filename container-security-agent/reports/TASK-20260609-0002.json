@@ -1,0 +1,40 @@
+{
+  "taskId" : "TASK-20260609-0002",
+  "targetIp" : "127.0.0.1",
+  "auditTime" : "2026-06-09 15:17:18",
+  "overallScore" : 0,
+  "passRate" : "0/1",
+  "targetEnvironment" : {
+    "osType" : "linux",
+    "osFlavors" : [ "debian", "ubuntu" ],
+    "osVersion" : null,
+    "shellType" : "bash",
+    "requiredTools" : [ "cat", "grep", "unshare", "nsenter" ],
+    "optionalTools" : [ "strace", "seccomp-tools" ],
+    "minKernelVersion" : "3.10.0",
+    "arch" : [ "amd64", "arm64" ],
+    "kernelVersion" : null
+  },
+  "skillReports" : [ {
+    "skillId" : "unknown",
+    "skillName" : "Unknown",
+    "finalStatus" : "FAIL",
+    "usedContextId" : null,
+    "contextEnvironment" : null,
+    "evolutionType" : "none",
+    "executionRecords" : [ ],
+    "testReport" : {
+      "summary" : "检测异常: java.lang.RuntimeException: AI 服务不可用: I/O error on POST request for \"https://api.openai.com/v1/chat/completions\": null",
+      "riskLevel" : "INFO",
+      "evidence" : "java.lang.RuntimeException: AI 服务不可用: I/O error on POST request for \"https://api.openai.com/v1/chat/completions\": null",
+      "affectedEnvironment" : null
+    },
+    "securityRemediation" : {
+      "strategy" : "",
+      "k8sYamlPatch" : "",
+      "alternativeAdvice" : "",
+      "environmentSpecificNotes" : ""
+    },
+    "evolved" : false
+  } ]
+}

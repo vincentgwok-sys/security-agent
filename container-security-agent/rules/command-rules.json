@@ -1,0 +1,72 @@
+{
+  "ruleSetId": "default-command-rules",
+  "version": "1.0.0",
+  "description": "默认命令安全规则，拦截高危破坏性操作",
+  "defaultAction": "BLOCK",
+  "allowlistMode": false,
+  "rules": [
+    {
+      "ruleId": "R-001",
+      "category": "DESTRUCTIVE_DELETE",
+      "description": "禁止递归强制删除根路径或关键系统目录",
+      "pattern": "rm\\s+(-[a-zA-Z]*[rf][a-zA-Z]*\\s+)*/(etc|var|usr|home|root|boot|bin|sbin|lib|opt|tmp|sys|dev|proc)(/\\S*)?",
+      "matchType": "REGEX",
+      "action": "BLOCK",
+      "message": "检测到高危删除命令 [{{command}}]：禁止对系统关键目录执行递归强制删除操作"
+    },
+    {
+      "ruleId": "R-002",
+      "category": "DESTRUCTIVE_FORMAT",
+      "description": "禁止磁盘格式化与清零操作",
+      "pattern": "(mkfs\\.|fdisk|dd\\s+if=|wipefs|mkswap)",
+      "matchType": "REGEX",
+      "action": "BLOCK",
+      "message": "检测到磁盘格式化/清零命令 [{{command}}]：可能在容器中执行破坏性磁盘操作"
+    },
+    {
+      "ruleId": "R-003",
+      "category": "DESTRUCTIVE_REDIRECT",
+      "description": "禁止通过重定向覆写关键系统文件",
+      "pattern": "(>|>>)\\s*/etc/(passwd|shadow|group|hosts|fstab|resolv\\.conf|sudoers)",
+      "matchType": "REGEX",
+      "action": "BLOCK",
+      "message": "检测到重定向覆写关键系统文件 [{{command}}]：禁止修改 /etc 下的核心配置文件"
+    },
+    {
+      "ruleId": "R-004",
+      "category": "SERVICE_CONTROL",
+      "description": "禁止关闭或重启系统服务（可能影响业务）",
+      "pattern": "(systemctl|service)\\s+(stop|disable|mask|restart)\\s+(sshd|docker|kubelet|containerd)",
+      "matchType": "REGEX",
+      "action": "WARN",
+      "message": "检测到操作关键服务命令 [{{command}}]：可能中断容器服务，建议人工确认后执行"
+    },
+    {
+      "ruleId": "R-005",
+      "category": "NETWORK_DENIAL",
+      "description": "禁止修改 iptables 规则导致网络不可达",
+      "pattern": "iptables\\s+-[AD]\\s+(INPUT|OUTPUT|FORWARD).*-j\\s+(DROP|REJECT)",
+      "matchType": "REGEX",
+      "action": "WARN",
+      "message": "检测到添加 DROP/REJECT 规则 [{{command}}]：可能导致容器网络不可达"
+    },
+    {
+      "ruleId": "R-006",
+      "category": "PRIVILEGE_ESCALATION_COMMAND",
+      "description": "禁止执行容器逃逸相关操作",
+      "pattern": "(nsenter|unshare)\\s+.*(--mount|--pid|--uts|--ipc|--net|--all)",
+      "matchType": "REGEX",
+      "action": "BLOCK",
+      "message": "检测到命名空间逃逸命令 [{{command}}]：存在严重容器逃逸风险"
+    },
+    {
+      "ruleId": "R-007",
+      "category": "ALLOWLIST_SAFE_READ",
+      "description": "白名单：允许只读类安全检测命令",
+      "pattern": "^(cat|ls|grep|echo|head|tail|find|which|uname|id|whoami|pwd|env|printenv|ps|netstat|ss|ip|ifconfig|mount|df|du|uptime|date|hostname|arch|getconf|cmp|cut|sort|wc|tr|od|strings|file|stat|readlink|curl|wget|ping|nslookup|dig|nc|net|systeminfo|ver|where|reg|netsh|ipconfig|powershell\\.exe|whoami\\.exe|net\\.exe|reg\\.exe|netsh\\.exe|ipconfig\\.exe|curl\\.exe|findstr)\\s",
+      "matchType": "REGEX",
+      "action": "ALLOW",
+      "message": ""
+    }
+  ]
+}

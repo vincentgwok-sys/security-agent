@@ -1,0 +1,13 @@
+Skill {{skillId}} | Context {{contextId}} | 命令 {{commandIndex}}/{{totalCommands}}
+
+当前执行命令: {{currentCommand}}
+容器 SSH 执行回显结果:
+- Exit Code: {{exitCode}}
+- STDOUT:
+{{stdout}}
+- STDERR:
+{{stderr}}
+
+该上下文剩余待执行命令: {{remainingCommands}}
+
+请根据以上结果，结合 System Prompt 规则，输出对应的判定 JSON。

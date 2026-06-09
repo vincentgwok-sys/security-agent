@@ -1,0 +1,111 @@
+{
+  "skillId": "SEC-K8S-CTX-004",
+  "skillName": "网络隔离与横向移动",
+  "versionTimestamp": 1700000000000,
+  "riskLevel": "HIGH",
+  "description": "检测容器是否具备修改网络配置（iptables、路由表）的权限，以及能否嗅探或扫描集群内其他 Pod/Service 的网络流量，评估其横向移动风险。",
+  "evolutionCount": 0,
+  "reportMetadata": {
+    "remediationFocus": "指导用户配置 Kubernetes NetworkPolicy 实现微隔离，结合 CNI 插件（如 Calico、Cilium）限制 Pod 间通信；必要时启用 Pod Security Standards 限制容器网络能力。"
+  },
+  "executionContexts": [
+    {
+      "contextId": "linux-debian-ubuntu-standard",
+      "environmentFingerprint": {
+        "osType": "linux",
+        "osFlavors": ["debian", "ubuntu"],
+        "shellType": "bash",
+        "requiredTools": ["iptables", "ip", "cat", "grep"],
+        "optionalTools": ["nmap", "tcpdump", "curl", "wget", "netcat", "nslookup", "dig"],
+        "minKernelVersion": "3.10.0",
+        "arch": ["amd64", "arm64"]
+      },
+      "envCheckCommands": [
+        "uname -s",
+        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
+        "which iptables ip cat grep nmap tcpdump curl wget nc nslookup dig 2>/dev/null",
+        "echo $SHELL",
+        "uname -r",
+        "uname -m"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "如果网络隔离策略正确配置，容器应无法修改 iptables 规则（Operation not permitted），且不应能访问集群 API Server 或其他未授权 Service。",
+        "detectionCommands": [
+          "iptables -L INPUT 2>&1 | head -10",
+          "iptables -A INPUT -j DROP 2>&1",
+          "ip route show 2>&1 | head -10",
+          "cat /etc/resolv.conf 2>&1",
+          "curl -k https://kubernetes.default.svc.cluster.local 2>&1 | head -10",
+          "wget -qO- http://169.254.169.254/latest/meta-data/ 2>&1 | head -5"
+        ]
+      },
+      "evolvedFrom": null,
+      "evolvedAt": null,
+      "deprecated": false
+    },
+    {
+      "contextId": "linux-alpine-busybox",
+      "environmentFingerprint": {
+        "osType": "linux",
+        "osFlavors": ["alpine"],
+        "shellType": "ash",
+        "requiredTools": ["cat", "grep", "ip"],
+        "optionalTools": ["iptables", "curl", "wget", "nslookup"],
+        "minKernelVersion": "3.10.0",
+        "arch": ["amd64", "arm64"]
+      },
+      "envCheckCommands": [
+        "uname -s",
+        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
+        "which cat grep ip iptables curl wget nslookup 2>/dev/null",
+        "echo $SHELL",
+        "uname -r",
+        "uname -m"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "Alpine 容器网络隔离要求同 Debian。Kubernetes NetworkPolicy 应在 CNI 层面阻止未授权流量。",
+        "detectionCommands": [
+          "cat /etc/resolv.conf 2>&1",
+          "ip route show 2>&1 | head -10",
+          "iptables -L INPUT 2>&1 | head -10",
+          "iptables -A INPUT -j DROP 2>&1",
+          "wget -qO- http://169.254.169.254/latest/meta-data/ 2>&1 | head -3"
+        ]
+      },
+      "evolvedFrom": "linux-debian-ubuntu-standard",
+      "evolvedAt": null,
+      "deprecated": false
+    },
+    {
+      "contextId": "windows-servercore-default",
+      "environmentFingerprint": {
+        "osType": "windows",
+        "osFlavors": ["windows-servercore", "windows-nanoserver"],
+        "shellType": "powershell",
+        "requiredTools": ["powershell.exe", "netsh.exe", "ipconfig.exe"],
+        "optionalTools": ["curl.exe"],
+        "minKernelVersion": "10.0.17763",
+        "arch": ["amd64"]
+      },
+      "envCheckCommands": [
+        "ver",
+        "powershell.exe -Command \"$env:OS\"",
+        "powershell.exe -Command \"(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').ProductName\"",
+        "where powershell.exe netsh.exe ipconfig.exe curl.exe 2>nul"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "Windows 容器通过 Windows Filtering Platform (WFP) 和虚拟交换机实现网络隔离。容器内进程不应能修改防火墙规则或嗅探其他端点的流量。",
+        "detectionCommands": [
+          "netsh advfirewall show currentprofile 2>&1",
+          "netsh interface ip show route 2>&1",
+          "ipconfig /all 2>&1",
+          "powershell.exe -Command \"Test-NetConnection -ComputerName kubernetes.default.svc.cluster.local -Port 443 2>&1\"",
+          "powershell.exe -Command \"Resolve-DnsName kubernetes.default.svc.cluster.local 2>&1\""
+        ]
+      },
+      "evolvedFrom": null,
+      "evolvedAt": null,
+      "deprecated": false
+    }
+  ]
+}

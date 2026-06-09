@@ -1,0 +1,109 @@
+{
+  "skillId": "SEC-K8S-CTX-002",
+  "skillName": "敏感挂载与文件系统滥用",
+  "versionTimestamp": 1700000000000,
+  "riskLevel": "HIGH",
+  "description": "检测容器是否挂载了宿主机的敏感目录（如 /proc、/sys、Docker socket、宿主机根文件系统等），从而评估其数据泄露与容器逃逸风险。",
+  "evolutionCount": 0,
+  "reportMetadata": {
+    "remediationFocus": "指导用户在 Kubernetes Pod 中正确配置 volumeMounts，避免将敏感宿主机路径挂载到容器内部；对 Docker socket 的访问应严格限制。"
+  },
+  "executionContexts": [
+    {
+      "contextId": "linux-debian-ubuntu-standard",
+      "environmentFingerprint": {
+        "osType": "linux",
+        "osFlavors": ["debian", "ubuntu"],
+        "shellType": "bash",
+        "requiredTools": ["mount", "cat", "df", "find", "grep"],
+        "optionalTools": ["lsblk", "stat"],
+        "minKernelVersion": "3.10.0",
+        "arch": ["amd64", "arm64"]
+      },
+      "envCheckCommands": [
+        "uname -s",
+        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
+        "which mount cat df find grep 2>/dev/null",
+        "echo $SHELL",
+        "uname -r",
+        "uname -m"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "安全容器不应暴露宿主机文件系统。挂载点中不应出现 /var/run/docker.sock、宿主机 /etc、/proc 或 /sys 的异常读写挂载。",
+        "detectionCommands": [
+          "mount 2>&1 | grep -E '/var/run/docker.sock|/run/docker.sock'",
+          "cat /proc/1/mounts | grep -E '/proc|/sys|/etc/kubernetes|/var/lib/kubelet'",
+          "df -h | grep -E '/host|/rootfs|/proc'",
+          "find / -name 'docker.sock' -type s 2>&1 | head -5",
+          "cat /proc/self/cgroup 2>&1 | head -5"
+        ]
+      },
+      "evolvedFrom": null,
+      "evolvedAt": null,
+      "deprecated": false
+    },
+    {
+      "contextId": "linux-alpine-busybox",
+      "environmentFingerprint": {
+        "osType": "linux",
+        "osFlavors": ["alpine"],
+        "shellType": "ash",
+        "requiredTools": ["mount", "cat", "df", "find", "grep"],
+        "optionalTools": [],
+        "minKernelVersion": "3.10.0",
+        "arch": ["amd64", "arm64"]
+      },
+      "envCheckCommands": [
+        "uname -s",
+        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
+        "which mount cat df find grep 2>/dev/null",
+        "echo $SHELL",
+        "uname -r",
+        "uname -m"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "同 Debian 环境。Alpine 容器不应挂载宿主机敏感路径，尤其关注挂载列表中的宿主机路径。",
+        "detectionCommands": [
+          "mount 2>&1",
+          "cat /proc/1/mounts | grep -E '/proc|/sys|/etc' | head -10",
+          "df -h 2>&1",
+          "find / -name 'docker.sock' -type s 2>&1 | head -3",
+          "cat /proc/self/cgroup 2>&1 | head -5"
+        ]
+      },
+      "evolvedFrom": "linux-debian-ubuntu-standard",
+      "evolvedAt": null,
+      "deprecated": false
+    },
+    {
+      "contextId": "windows-servercore-default",
+      "environmentFingerprint": {
+        "osType": "windows",
+        "osFlavors": ["windows-servercore", "windows-nanoserver"],
+        "shellType": "powershell",
+        "requiredTools": ["powershell.exe", "net.exe", "reg.exe"],
+        "optionalTools": ["docker.exe"],
+        "minKernelVersion": "10.0.17763",
+        "arch": ["amd64"]
+      },
+      "envCheckCommands": [
+        "ver",
+        "powershell.exe -Command \"$env:OS\"",
+        "powershell.exe -Command \"(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').ProductName\"",
+        "where powershell.exe net.exe reg.exe 2>nul"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "Windows 容器不应挂载宿主机磁盘或敏感注册表。应验证 HCS (Host Compute Service) 配置确认容器运行在隔离模式下。",
+        "detectionCommands": [
+          "net use 2>&1",
+          "powershell.exe -Command \"Get-PSDrive | Where-Object {$_.Provider.Name -eq 'FileSystem'} | Format-Table Name,Root\"",
+          "powershell.exe -Command \"Get-SmbMapping 2>&1\"",
+          "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\docker\" 2>&1"
+        ]
+      },
+      "evolvedFrom": null,
+      "evolvedAt": null,
+      "deprecated": false
+    }
+  ]
+}
