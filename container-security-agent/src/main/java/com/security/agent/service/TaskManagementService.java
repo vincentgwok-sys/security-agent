@@ -78,6 +78,7 @@ public class TaskManagementService {
                     .filter(p -> p.getFileName().toString().startsWith(prefix))
                     .count();
             dailySeq.set((int) todayCount);
+            currentDate = today;
 
             log.info("从磁盘恢复 {} 个历史任务 (今天已有 {} 个)", loaded, todayCount);
         } catch (IOException e) {

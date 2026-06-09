@@ -27,12 +27,9 @@ public class AiConfig {
     @Bean
     @Primary
     public OpenAiApi openAiApi() {
-        // DeepSeek 端点: https://api.deepseek.com/v1/chat/completions
-        String url = baseUrl;
-        if (!url.endsWith("/v1")) {
-            url = url + "/v1";
-        }
-        return new OpenAiApi(url, apiKey);
+        // DeepSeek 端点: https://api.deepseek.com/chat/completions
+        // 注意：DeepSeek 不使用 /v1 前缀，与 OpenAI 不同
+        return new OpenAiApi(baseUrl, apiKey);
     }
 
     @Bean
