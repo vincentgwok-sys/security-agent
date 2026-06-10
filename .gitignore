@@ -34,3 +34,6 @@ Thumbs.db
 .claude
 openspec/config.yaml
 openspec/changes/**/.openspec.yaml
+
+# ── Sensitive configuration ──
+container-security-agent/src/main/resources/application.yml

@@ -1,5 +1,7 @@
 # Container Security Agent
 
+> ⚠️ **安全提示**：本项目曾因 `application.yml` 提交到 GitHub 导致 API Key 泄露。现已将所有敏感配置迁移到环境变量，`application.yml` 已加入 `.gitignore`。如果你曾 Fork 或克隆过含历史提交的仓库，请立即前往 DeepSeek 控制台**轮换你的 API Key**。
+
 基于 AI 的容器运行时安全检测工具。通过 SSH 或 kubectl 跳板机连接目标容器，执行预定义的安全检测命令，利用大模型分析回显并生成结构化的安全报告，附带 Kubernetes 修复建议。
 
 ## 架构概览
@@ -40,19 +42,41 @@
 - JDK 21
 - Maven 3.9+
 - Node.js 18+
-- DeepSeek API Key (或任意 OpenAI 兼容 API)
+- DeepSeek API Key（或任意 OpenAI 兼容 API）
 
 ### 配置
 
-编辑 `src/main/resources/application.yml`，设置 API Key：
+项目通过**环境变量**管理敏感配置。复制模板文件为本地配置：
 
-```yaml
-spring:
-  ai:
-    openai:
-      api-key: <your-deepseek-api-key>
-      base-url: https://api.deepseek.com
+```bash
+cp src/main/resources/application-example.yml src/main/resources/application.yml
 ```
+
+本地 `application.yml` 已被 `.gitignore` 排除，不会提交到 Git。
+
+**必填环境变量：**
+
+```bash
+# Windows PowerShell
+$env:SECURITY_AGENT_AI_API_KEY="your-deepseek-api-key"
+
+# Linux / macOS / Git Bash
+export SECURITY_AGENT_AI_API_KEY="your-deepseek-api-key"
+```
+
+所有环境变量：
+
+| 环境变量 | 默认值 | 说明 |
+|----------|--------|------|
+| `SECURITY_AGENT_AI_API_KEY` | **(必填)** | DeepSeek 或 OpenAI 兼容 API Key |
+| `SECURITY_AGENT_AI_BASE_URL` | `https://api.deepseek.com` | AI API 地址 |
+| `SECURITY_AGENT_AI_MODEL` | `deepseek-v4-pro` | 模型名称 |
+| `SERVER_PORT` | `8080` | 后端服务端口 |
+| `SKILLS_DIR` | `./skills` | Skill 定义文件目录 |
+| `RULES_DIR` | `./rules` | 命令规则文件目录 |
+| `RULES_DEFAULT_ACTION` | `BLOCK` | 未命中规则时的默认动作 |
+| `REPORTS_DIR` | `./reports` | 报告输出目录 |
+| `LOGS_DIR` | `./logs` | AI 交互日志目录 |
 
 ### 启动开发环境
 
@@ -114,6 +138,7 @@ npm run dev
 
 - **直连 SSH**：直接 SSH 到目标容器
 - **Kubectl 跳板机**：SSH 到跳板机 → 浏览并选择 Pod → 通过 `kubectl exec` 执行检测
+- **线下执行**：下载 Python 脚本 → 在隔离容器中离线执行 → 上传结果 ZIP → 平台回放分析
 
 ### 命令规则引擎
 
@@ -155,6 +180,9 @@ npm run dev
 | GET | `/api/tasks/{taskId}` | 查询单个任务 |
 | POST | `/api/tasks/{taskId}/cancel` | 终止运行中的任务 |
 | DELETE | `/api/tasks/{taskId}` | 删除非运行中任务（保留日志和报告） |
+| GET | `/api/tasks/{taskId}/script/download?token={token}` | 下载线下执行脚本 |
+| POST | `/api/tasks/{taskId}/results/upload` | 上传线下执行结果 ZIP |
+| GET | `/api/tasks/{taskId}/results/download` | 下载原始上传 ZIP 文件 |
 
 ### 报告
 
@@ -193,7 +221,10 @@ npm run dev
 
 ## 配置参考
 
+所有敏感配置通过环境变量注入。参见上方「配置」章节的完整环境变量表。
+
 ```yaml
+# application.yml 中的非敏感配置（本地覆盖时可用）
 security-agent:
   skills:
     directory: ${SKILLS_DIR:./skills}

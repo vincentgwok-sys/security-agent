@@ -1,0 +1,47 @@
+# ============================================================
+# Container Security Agent — 配置模板
+# ============================================================
+# 复制此文件为 application.yml 并填入你的实际配置。
+# application.yml 已被 .gitignore 排除，不会提交到 Git。
+# ============================================================
+
+spring:
+  application:
+    name: container-security-agent
+  ai:
+    openai:
+      # 必填：你的 API Key（DeepSeek 或 OpenAI 兼容）
+      api-key: ${SECURITY_AGENT_AI_API_KEY:your-api-key-here}
+      # API 地址（默认为 DeepSeek）
+      base-url: ${SECURITY_AGENT_AI_BASE_URL:https://api.deepseek.com}
+      chat:
+        options:
+          # 模型名称
+          model: ${SECURITY_AGENT_AI_MODEL:deepseek-v4-pro}
+          temperature: 0.1
+
+server:
+  port: ${SERVER_PORT:8080}
+
+security-agent:
+  skills:
+    directory: ${SKILLS_DIR:./skills}
+  rules:
+    directory: ${RULES_DIR:./rules}
+    default-action: ${RULES_DEFAULT_ACTION:BLOCK}
+  ssh:
+    connection-timeout: 10000
+    idle-timeout: 60000
+    max-sessions-per-host: 3
+  report:
+    output-directory: ${REPORTS_DIR:./reports}
+  logs:
+    directory: ${LOGS_DIR:./logs}
+  detection:
+    max-evolve-rounds: 5
+    max-context-evolutions: 3
+    command-timeout-seconds: 30
+
+logging:
+  level:
+    com.security.agent: DEBUG

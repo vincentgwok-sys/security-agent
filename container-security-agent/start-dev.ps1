@@ -11,6 +11,13 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Container Security Agent - Dev Mode" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 
+# ── Check required env vars ──
+if (-not $env:SECURITY_AGENT_AI_API_KEY) {
+    Write-Host "WARNING: SECURITY_AGENT_AI_API_KEY is not set!" -ForegroundColor Red
+    Write-Host "  Set it before starting: `$env:SECURITY_AGENT_AI_API_KEY='your-key'" -ForegroundColor Yellow
+    Write-Host "  Or create application.yml from application-example.yml template." -ForegroundColor Yellow
+}
+
 # ── [1/4] Kill old processes ──
 Write-Host "[1/4] Stopping old processes..." -ForegroundColor Yellow
 foreach ($port in @(8080, 5173)) {
