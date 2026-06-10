@@ -219,6 +219,15 @@ public class CommandRuleService {
         }
     }
 
+    /**
+     * Get all currently active rules as a flat list (for script embedding).
+     */
+    public List<CommandRule> getAllRules() {
+        RuleSet rs = getActiveRules();
+        if (rs == null || rs.getRules() == null) return new ArrayList<>();
+        return new ArrayList<>(rs.getRules());
+    }
+
     // Inner class for rule set deserialization
     public static class RuleSet {
         private String ruleSetId;

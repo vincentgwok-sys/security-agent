@@ -20,6 +20,12 @@
       <router-link to="/tasks" class="btn btn-primary" style="margin-top: 12px;">返回任务列表</router-link>
     </div>
     <template v-else>
+      <!-- Execution mode label -->
+      <div v-if="report.connectionType" class="exec-mode-label" :class="'mode-' + report.connectionType">
+        {{ report.connectionType === 'offline' ? '📥 执行模式：线下回放' :
+           report.connectionType === 'kubectl' ? '⎈ 执行模式：Kubectl 跳板' : '🔗 执行模式：实时检测' }}
+      </div>
+
       <!-- Score Section -->
       <div class="card score-card">
         <div class="score-main">
@@ -219,6 +225,14 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.exec-mode-label {
+  display: inline-block; padding: 4px 14px; border-radius: 999px; font-size: 13px;
+  font-weight: 500; margin-bottom: 16px;
+}
+.mode-ssh { background: #eff6ff; color: #1e40af; }
+.mode-kubectl { background: #fdf4ff; color: #86198f; }
+.mode-offline { background: #fffbeb; color: #92400e; border: 1px solid #fcd34d; }
+
 .score-card { padding: 28px; }
 .score-main { display: flex; align-items: center; gap: 40px; }
 .score-svg { width: 140px; height: 140px; }

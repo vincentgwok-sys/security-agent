@@ -16,30 +16,36 @@
               <input type="radio" value="kubectl" v-model="form.connectionType" />
               ⎈ Kubectl 跳板机
             </label>
+            <label class="conn-type-btn" :class="{ active: form.connectionType === 'offline' }">
+              <input type="radio" value="offline" v-model="form.connectionType" />
+              📥 线下执行
+            </label>
           </div>
         </div>
 
-        <!-- Target / Jumpbox fields -->
-        <div class="form-group">
-          <label>{{ form.connectionType === 'kubectl' ? '跳板机 IP *' : '目标容器 IP *' }}</label>
-          <input v-model="form.targetIp" :placeholder="form.connectionType === 'kubectl' ? '跳板机地址，例如：10.0.0.100' : '例如：10.0.0.50'" required />
-        </div>
-
-        <div class="form-row">
-          <div class="form-group" style="flex: 1;">
-            <label>SSH 端口</label>
-            <input v-model.number="form.sshPort" type="number" placeholder="22" />
+        <!-- Target / Jumpbox fields (hidden in offline mode) -->
+        <template v-if="form.connectionType !== 'offline'">
+          <div class="form-group">
+            <label>{{ form.connectionType === 'kubectl' ? '跳板机 IP *' : '目标容器 IP *' }}</label>
+            <input v-model="form.targetIp" :placeholder="form.connectionType === 'kubectl' ? '跳板机地址，例如：10.0.0.100' : '例如：10.0.0.50'" required />
           </div>
-          <div class="form-group" style="flex: 2;">
-            <label>SSH 用户名 *</label>
-            <input v-model="form.sshUser" placeholder="root" required />
-          </div>
-        </div>
 
-        <div class="form-group">
-          <label>SSH 密码 *</label>
-          <input v-model="form.sshPassword" type="password" placeholder="输入密码" required />
-        </div>
+          <div class="form-row">
+            <div class="form-group" style="flex: 1;">
+              <label>SSH 端口</label>
+              <input v-model.number="form.sshPort" type="number" placeholder="22" />
+            </div>
+            <div class="form-group" style="flex: 2;">
+              <label>SSH 用户名 *</label>
+              <input v-model="form.sshUser" placeholder="root" required />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>SSH 密码 *</label>
+            <input v-model="form.sshPassword" type="password" placeholder="输入密码" required />
+          </div>
+        </template>
 
         <!-- Kubectl-specific: namespace + pod browser -->
         <template v-if="form.connectionType === 'kubectl'">
@@ -108,18 +114,37 @@
         <div style="display: flex; gap: 12px; margin-top: 20px;">
           <button type="submit" class="btn btn-primary"
             :disabled="submitting || form.skillIds.length === 0 || (form.connectionType === 'kubectl' && !form.targetPod)">
-            {{ submitting ? '提交中...' : '启动检测' }}
+            {{ submitting ? '提交中...' : form.connectionType === 'offline' ? '创建线下任务' : '启动检测' }}
           </button>
           <button type="button" class="btn btn-secondary" @click="resetForm">重置</button>
         </div>
       </form>
 
-      <div v-if="createdTaskId" class="success-msg" style="margin-top: 16px;">
+      <!-- Online success -->
+      <div v-if="createdTaskId && form.connectionType !== 'offline'" class="success-msg" style="margin-top: 16px;">
         ✅ 任务已创建！任务 ID：<strong>{{ createdTaskId }}</strong>
         <br />
         <router-link :to="`/tasks`">查看任务列表</router-link>
         &nbsp;|&nbsp;
         <router-link :to="`/report/${createdTaskId}`">查看报告</router-link>
+      </div>
+
+      <!-- Offline success: download area -->
+      <div v-if="createdTaskId && form.connectionType === 'offline'" class="offline-download-area" style="margin-top: 16px;">
+        <div class="success-msg">
+          ✅ 线下任务已创建！任务 ID：<strong>{{ createdTaskId }}</strong>
+        </div>
+        <div class="offline-download-card">
+          <h4>📥 下载检测脚本</h4>
+          <p>请在目标容器中执行此脚本，执行完成后将生成的 ZIP 文件上传回平台。</p>
+          <div v-if="downloadToken" class="token-hint">
+            <small>下载令牌（仅本次可见，请妥善保管）：<code>{{ downloadToken }}</code></small>
+          </div>
+          <button class="btn btn-primary" style="margin-top: 10px;" @click="handleDownloadScript">
+            ⬇ 下载 Python 脚本
+          </button>
+          <p class="script-note">脚本仅依赖 Python 3.6+ 标准库，无需安装第三方包。</p>
+        </div>
       </div>
     </div>
   </div>
@@ -127,7 +152,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { listSkills, createTask, listKubectlPods } from '../api'
+import { listSkills, createTask, listKubectlPods, downloadScript } from '../api'
 import RiskLevelTag from '../components/RiskLevelTag.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 
@@ -136,6 +161,7 @@ const skillsLoading = ref(true)
 const submitting = ref(false)
 const error = ref('')
 const createdTaskId = ref('')
+const downloadToken = ref('')
 
 const form = reactive({
   connectionType: 'ssh',
@@ -201,20 +227,42 @@ async function handleSubmit() {
   submitting.value = true
   try {
     const { data } = await createTask({
-      targetIp: form.targetIp,
+      targetIp: form.targetIp || 'offline',
       sshPort: form.sshPort,
-      sshUser: form.sshUser,
-      sshPassword: form.sshPassword,
+      sshUser: form.sshUser || 'offline',
+      sshPassword: form.sshPassword || 'offline',
       skillIds: form.skillIds,
       connectionType: form.connectionType,
       targetPod: form.connectionType === 'kubectl' ? form.targetPod : null,
       targetNamespace: form.connectionType === 'kubectl' ? form.targetNamespace : null
     })
     createdTaskId.value = data.taskId
+    if (data.downloadToken) {
+      downloadToken.value = data.downloadToken
+    }
   } catch (e) {
     error.value = e.response?.data?.error || e.message || '创建任务失败'
   } finally {
     submitting.value = false
+  }
+}
+
+async function handleDownloadScript() {
+  if (!createdTaskId.value || !downloadToken.value) return
+  try {
+    const response = await downloadScript(createdTaskId.value, downloadToken.value)
+    const blob = response.data
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `security_scan_${createdTaskId.value}.py`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    downloadToken.value = '' // token consumed
+  } catch (e) {
+    error.value = '脚本下载失败: ' + (e.response?.data?.error || e.message || '未知错误')
   }
 }
 
@@ -228,6 +276,7 @@ function resetForm() {
   form.targetPod = ''
   form.targetNamespace = ''
   createdTaskId.value = ''
+  downloadToken.value = ''
   error.value = ''
   kubectlNamespace.value = ''
   pods.value = []
@@ -277,4 +326,14 @@ function resetForm() {
 .success-msg { background: #f0fdf4; border: 1px solid #86efac; color: #166534; padding: 12px 16px; border-radius: 8px; font-size: 14px; }
 .success-msg a { color: #1d4ed8; }
 .error-msg { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-top: 8px; }
+
+/* Offline download card */
+.offline-download-card {
+  background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 20px; margin-top: 12px;
+}
+.offline-download-card h4 { margin: 0 0 8px 0; font-size: 16px; }
+.offline-download-card p { font-size: 13px; color: #4b5563; margin: 4px 0; line-height: 1.5; }
+.offline-download-card .token-hint { background: #fefce8; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 12px; margin: 8px 0; }
+.offline-download-card .token-hint code { font-size: 12px; word-break: break-all; }
+.offline-download-card .script-note { font-size: 12px; color: #9ca3af; margin-top: 8px; }
 </style>

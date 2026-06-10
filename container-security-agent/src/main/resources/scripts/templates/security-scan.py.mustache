@@ -1,0 +1,608 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Container Security Agent - Offline Detection Script
+Generated for task: {{taskId}}
+Script Version: {{scriptVersion}}
+Generated At: {{generatedAt}}
+
+This script performs security detection checks against the local container
+environment. It collects environment fingerprint data, matches execution
+contexts, runs detection commands, and packages results into a ZIP file
+for upload back to the platform.
+
+Usage:
+    python security_scan_{{taskId}}.py
+    SKILL_IDS=SKILL-001,SKILL-002 python security_scan_{{taskId}}.py
+
+Requirements: Python 3.6+ (standard library only)
+"""
+from __future__ import print_function
+
+import sys
+import os
+import json
+import base64
+import subprocess
+import datetime
+import platform
+import zipfile
+import re
+import traceback
+
+# ---------------------------------------------------------------------------
+# Python version check
+# ---------------------------------------------------------------------------
+if sys.version_info < (3, 6):
+    print("ERROR: This script requires Python 3.6 or higher.")
+    print("Current version: {}".format(sys.version))
+    sys.exit(1)
+
+# ---------------------------------------------------------------------------
+# Embedded data (Base64-encoded JSON)
+# ---------------------------------------------------------------------------
+_EMBEDDED_SKILLS_B64 = "{{{skillsBase64}}}"
+_EMBEDDED_RULES_B64 = "{{{rulesBase64}}}"
+_TASK_ID = "{{taskId}}"
+_SCRIPT_VERSION = "{{scriptVersion}}"
+_UPLOAD_URL_HINT = "{{uploadUrl}}/tasks/{{taskId}}/upload"
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+COMMAND_TIMEOUT_SECONDS = 30
+STDOUT_MAX_BYTES = 500 * 1024   # 500KB per command output limit
+STDERR_MAX_BYTES = 500 * 1024
+CMD_TIMEOUT_SIGNAL = "SIGTERM"
+
+
+def decode_json(b64_string):
+    """Decode a Base64-encoded JSON string."""
+    raw = base64.b64decode(b64_string).decode("utf-8")
+    return json.loads(raw)
+
+
+def load_skills():
+    """Load embedded Skill definitions."""
+    return decode_json(_EMBEDDED_SKILLS_B64)
+
+
+def load_rules():
+    """Load embedded command rules."""
+    return decode_json(_EMBEDDED_RULES_B64)
+
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+class Logger:
+    """Simple dual-write logger: stdout + log_lines for ZIP packaging."""
+
+    def __init__(self):
+        self.lines = []
+
+    def _log(self, level, msg):
+        line = "[{}] [{}] {}".format(
+            datetime.datetime.now().isoformat(), level, msg)
+        print(line)
+        self.lines.append(line)
+
+    def info(self, msg):
+        self._log("INFO", msg)
+
+    def warn(self, msg):
+        self._log("WARN", msg)
+
+    def error(self, msg):
+        self._log("ERROR", msg)
+
+    def debug(self, msg):
+        self._log("DEBUG", msg)
+
+    def get_log_text(self):
+        return "\n".join(self.lines)
+
+
+logger = Logger()
+
+# ---------------------------------------------------------------------------
+# Environment Fingerprint Collection
+# ---------------------------------------------------------------------------
+
+def run_command(command, timeout=COMMAND_TIMEOUT_SECONDS, shell=True):
+    """Execute a shell command and return (stdout, stderr, exit_code)."""
+    try:
+        proc = subprocess.run(
+            command,
+            shell=shell,
+            capture_output=True,
+            timeout=timeout,
+            text=False
+        )
+        stdout = proc.stdout.decode("utf-8", errors="replace")
+        stderr = proc.stderr.decode("utf-8", errors="replace")
+        exit_code = proc.returncode
+    except subprocess.TimeoutExpired:
+        stdout = ""
+        stderr = "Command timed out after {}s".format(timeout)
+        exit_code = -1
+    except FileNotFoundError:
+        stdout = ""
+        stderr = "Shell not found or command not executable"
+        exit_code = -2
+    except Exception as e:
+        stdout = ""
+        stderr = "Command execution error: {}".format(str(e))
+        exit_code = -3
+
+    # Truncate large outputs
+    stdout = stdout[:STDOUT_MAX_BYTES]
+    stderr = stderr[:STDERR_MAX_BYTES]
+    return stdout, stderr, exit_code
+
+
+def collect_environment_fingerprint(skills):
+    """Collect environment fingerprint by running all unique envCheckCommands."""
+    logger.info("=== Phase 0: Environment Fingerprint Collection ===")
+
+    # Gather all unique probe commands from all skills
+    all_probes = set()
+    for skill in skills:
+        for ctx in skill.get("executionContexts", []):
+            for cmd in ctx.get("envCheckCommands", []):
+                all_probes.add(cmd)
+
+    if not all_probes:
+        logger.warn("No environment check commands found in skills")
+        return build_fallback_fingerprint()
+
+    # Execute combined probe
+    combined = "; echo '---NEXT_PROBE---'; ".join(all_probes)
+    stdout, stderr, exit_code = run_command(combined)
+
+    # Parse probe results — split by separator
+    sections = stdout.split("---NEXT_PROBE---")
+    raw_outputs = dict(zip(all_probes, sections))
+
+    return parse_fingerprint_from_output(raw_outputs)
+
+
+def parse_fingerprint_from_output(raw_outputs):
+    """Parse collected probe outputs into an EnvironmentFingerprint object."""
+    combined_output = "\n".join(raw_outputs.values())
+
+    os_type = "linux"  # default assumption
+    os_flavors = []
+    kernel_version = ""
+    shell_type = "sh"
+    arch = platform.machine() or "unknown"
+    available_tools = []
+
+    # Detect OS type
+    if "Microsoft" in combined_output or "Windows" in combined_output:
+        os_type = "windows"
+
+    # Detect OS flavor
+    if "alpine" in combined_output.lower():
+        os_flavors.append("alpine")
+    if "ubuntu" in combined_output.lower():
+        os_flavors.append("ubuntu")
+    if "debian" in combined_output.lower():
+        os_flavors.append("debian")
+    if "centos" in combined_output.lower():
+        os_flavors.append("centos")
+    if "rhel" in combined_output.lower() or "red hat" in combined_output.lower():
+        os_flavors.append("rhel")
+    if "fedora" in combined_output.lower():
+        os_flavors.append("fedora")
+
+    # Detect kernel version
+    for output in raw_outputs.values():
+        for line in output.split("\n"):
+            line = line.strip()
+            if re.match(r'^\d+\.\d+\.\d+', line):
+                kernel_version = line
+                break
+        if kernel_version:
+            break
+
+    # Detect shell
+    if "/bin/bash" in combined_output:
+        shell_type = "bash"
+    elif "/bin/sh" in combined_output:
+        shell_type = "sh"
+
+    # Detect available tools
+    tool_list = ["cat", "grep", "mount", "awk", "sed", "find", "ls",
+                 "ps", "netstat", "ss", "iptables", "nsenter", "unshare",
+                 "capsh", "getfattr", "getcap", "chroot", "systemctl"]
+    for tool in tool_list:
+        check_stdout, _, check_rc = run_command("which {} 2>/dev/null".format(tool))
+        if check_rc == 0 and check_stdout.strip():
+            available_tools.append(tool)
+
+    fingerprint = {
+        "osType": os_type,
+        "osFlavors": os_flavors,
+        "kernelVersion": kernel_version,
+        "shellType": shell_type,
+        "arch": arch,
+        "availableTools": available_tools
+    }
+    logger.info("Fingerprint: OS={}/{} Shell={} Tools=[{}]".format(
+        os_type, ",".join(os_flavors), shell_type, ",".join(available_tools)))
+    return fingerprint
+
+
+def build_fallback_fingerprint():
+    """Build a minimal fingerprint when no probes are available."""
+    return {
+        "osType": "linux",
+        "osFlavors": [],
+        "kernelVersion": "",
+        "shellType": "sh",
+        "arch": platform.machine() or "unknown",
+        "availableTools": ["cat", "grep", "ls"]
+    }
+
+
+# ---------------------------------------------------------------------------
+# Context Matching (mirrors Java SkillLoaderService.selectBestContext)
+# ---------------------------------------------------------------------------
+
+def _tools_available(required_tools, available_tools):
+    """Check if all required tools are in the available tools set."""
+    if not required_tools:
+        return True
+    available_set = set(available_tools)
+    for tool in required_tools:
+        if tool not in available_set:
+            return False
+    return True
+
+
+def _is_exact_match(ctx, fingerprint):
+    """Exact match: osType + osFlavor match, and requiredTools all available."""
+    ctx_fp = ctx.get("environmentFingerprint", {})
+    if not ctx_fp:
+        return False
+
+    os_match = (ctx_fp.get("osType", "").lower() ==
+                fingerprint.get("osType", "").lower())
+
+    ctx_flavors = ctx_fp.get("osFlavors", []) or []
+    fp_flavors = fingerprint.get("osFlavors", []) or []
+    flavors_overlap = any(
+        f.lower() in [ff.lower() for ff in fp_flavors]
+        for f in ctx_flavors
+    )
+
+    required_tools = ctx_fp.get("requiredTools", []) or []
+    available_tools = fingerprint.get("availableTools", []) or []
+    tools_ok = _tools_available(required_tools, available_tools)
+
+    return os_match and flavors_overlap and tools_ok
+
+
+def _is_partial_match(ctx, fingerprint):
+    """Partial match: osType matches, requiredTools available."""
+    ctx_fp = ctx.get("environmentFingerprint", {})
+    if not ctx_fp:
+        return False
+
+    os_match = (ctx_fp.get("osType", "").lower() ==
+                fingerprint.get("osType", "").lower())
+
+    required_tools = ctx_fp.get("requiredTools", []) or []
+    available_tools = fingerprint.get("availableTools", []) or []
+    tools_ok = _tools_available(required_tools, available_tools)
+
+    return os_match and tools_ok
+
+
+def select_best_context(skill, fingerprint):
+    """Select the best matching execution context for a skill.
+    Returns (ExecutionContext, match_type) or (None, None).
+    """
+    contexts = skill.get("executionContexts", [])
+    active = [c for c in contexts if not c.get("deprecated", False)]
+
+    # Sort by evolvedAt descending for tie-breaking
+    active.sort(key=lambda c: c.get("evolvedAt", 0), reverse=True)
+
+    # Round 1: Exact match
+    for ctx in active:
+        if _is_exact_match(ctx, fingerprint):
+            logger.info("[{}] Exact match: {}".format(
+                skill.get("skillId", "?"), ctx.get("contextId", "?")))
+            return ctx, "exact"
+
+    # Round 2: Partial match
+    for ctx in active:
+        if _is_partial_match(ctx, fingerprint):
+            logger.info("[{}] Partial match: {}".format(
+                skill.get("skillId", "?"), ctx.get("contextId", "?")))
+            return ctx, "partial"
+
+    logger.warn("[{}] No matching context for OS={}/{}".format(
+        skill.get("skillId", "?"),
+        fingerprint.get("osType", "?"),
+        ",".join(fingerprint.get("osFlavors", []))))
+    return None, None
+
+
+# ---------------------------------------------------------------------------
+# Command Rule Engine (mirrors Java CommandRuleService)
+# ---------------------------------------------------------------------------
+
+def match_rule(rule, command):
+    """Check if a single rule matches a command."""
+    match_type = rule.get("matchType", "PREFIX")
+    pattern = rule.get("pattern", "")
+
+    if match_type == "EXACT":
+        return command.strip() == pattern.strip()
+    elif match_type == "PREFIX":
+        return command.strip().startswith(pattern.strip())
+    elif match_type == "REGEX":
+        try:
+            return bool(re.search(pattern, command))
+        except re.error:
+            return False
+    return False
+
+
+def evaluate_command(command, rules):
+    """Evaluate a command against the rule engine.
+    Returns ("ALLOW", rule_id, message), ("WARN", rule_id, message),
+    or ("BLOCK", rule_id, message).
+    """
+    # Sort by precedence: BLOCK > WARN > ALLOW
+    precedence = {"BLOCK": 0, "WARN": 1, "ALLOW": 2}
+    rules_sorted = sorted(rules, key=lambda r: precedence.get(r.get("action", "ALLOW"), 3))
+
+    matched_rule = None
+    for rule in rules_sorted:
+        if match_rule(rule, command):
+            matched_rule = rule
+            break
+
+    if matched_rule:
+        action = matched_rule.get("action", "BLOCK")
+        rule_id = matched_rule.get("ruleId", "UNKNOWN")
+        message = matched_rule.get("message", "")
+        return action, rule_id, message
+
+    # Default action: BLOCK unknown commands
+    default_action = "BLOCK"
+    return default_action, "DEFAULT", "Command did not match any allow rule"
+
+
+# ---------------------------------------------------------------------------
+# Detection Execution
+# ---------------------------------------------------------------------------
+
+def execute_detection_for_skill(skill, fingerprint, rules, results_dir):
+    """Execute detection commands for a single skill.
+    Returns (status, records) where status is COMPLETED/SKIPPED/ERROR.
+    """
+    skill_id = skill.get("skillId", "unknown")
+    skill_name = skill.get("skillName", skill_id)
+    logger.info("=== Skill: {} ({}) ===".format(skill_name, skill_id))
+
+    # Select context
+    ctx, match_type = select_best_context(skill, fingerprint)
+    if ctx is None:
+        logger.warn("[{}] Skipped — no matching execution context".format(skill_id))
+        return "SKIPPED", []
+
+    execution_logic = ctx.get("executionLogic", {})
+    detection_commands = execution_logic.get("detectionCommands", [])
+    if not detection_commands:
+        logger.warn("[{}] Skipped — no detection commands in context".format(skill_id))
+        return "SKIPPED", []
+
+    records = []
+    for cmd in detection_commands:
+        # Rule engine check
+        action, rule_id, rule_msg = evaluate_command(cmd, rules)
+
+        record = {
+            "command": cmd,
+            "round": 0,
+            "startedAt": datetime.datetime.now().isoformat(),
+            "result": {
+                "stdout": "",
+                "stderr": "",
+                "exitCode": 0,
+                "blocked": False,
+                "connectionError": False
+            }
+        }
+
+        if action == "BLOCK":
+            logger.warn("[{}] BLOCKED by rule {}: {}".format(
+                skill_id, rule_id, cmd))
+            record["result"]["blocked"] = True
+            record["result"]["stderr"] = "Blocked by rule {}: {}".format(
+                rule_id, rule_msg)
+            record["endedAt"] = datetime.datetime.now().isoformat()
+            records.append(record)
+            continue
+
+        if action == "WARN":
+            logger.warn("[{}] WARN by rule {}: {}".format(
+                skill_id, rule_id, cmd))
+
+        # Execute command
+        logger.info("[{}] Executing: {}".format(skill_id, cmd))
+        stdout, stderr, exit_code = run_command(cmd)
+
+        record["result"]["stdout"] = stdout
+        record["result"]["stderr"] = stderr
+        record["result"]["exitCode"] = exit_code
+        record["endedAt"] = datetime.datetime.now().isoformat()
+        records.append(record)
+
+        # Log result summary
+        out_len = len(stdout)
+        logger.info("[{}] exit={}, stdout={} bytes, stderr={} bytes".format(
+            skill_id, exit_code, out_len, len(stderr)))
+
+    # Determine final status
+    status = "COMPLETED"
+    logger.info("[{}] Detection complete: {} commands executed".format(
+        skill_id, len(records)))
+    return status, records
+
+
+# ---------------------------------------------------------------------------
+# Result Packaging
+# ---------------------------------------------------------------------------
+
+def build_manifest(skill_ids, skill_results, execution_started_at):
+    """Build the manifest.json content."""
+    return {
+        "taskId": _TASK_ID,
+        "scriptVersion": _SCRIPT_VERSION,
+        "executionStartedAt": execution_started_at,
+        "executionEndedAt": datetime.datetime.now().isoformat(),
+        "hostname": platform.node() or "unknown",
+        "pythonVersion": sys.version,
+        "skillIds": skill_ids,
+        "skillResults": skill_results
+    }
+
+
+def package_results(fingerprint, all_skill_results, all_skill_records,
+                    execution_started_at):
+    """Package all results into a ZIP file."""
+    zip_filename = "task_{}_result.zip".format(_TASK_ID)
+    logger.info("=== Packaging results into {} ===".format(zip_filename))
+
+    # Prepare manifest
+    skill_ids = [s.get("skillId", "?") for s in load_skills()]
+    skill_results = []
+    for skill_id, (status, records) in all_skill_results.items():
+        skill_results.append({
+            "skillId": skill_id,
+            "status": status,
+            "errorMessage": ""
+        })
+
+    manifest = build_manifest(skill_ids, skill_results, execution_started_at)
+
+    with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zf:
+        # manifest.json
+        zf.writestr("manifest.json",
+                    json.dumps(manifest, indent=2, ensure_ascii=False))
+
+        # fingerprint.json
+        zf.writestr("fingerprint.json",
+                    json.dumps(fingerprint, indent=2, ensure_ascii=False))
+
+        # execution_results/{skillId}.json
+        for skill_id, (status, records) in all_skill_results.items():
+            path = "execution_results/{}.json".format(skill_id)
+            zf.writestr(path,
+                        json.dumps(records, indent=2, ensure_ascii=False))
+
+        # evolved_skills/ — write evolved skills if any
+        # (V1 does not evolve offline; placeholder for future)
+        evolved_skills = []
+        for skill in load_skills():
+            # Check if any context was evolved offline
+            for ctx in skill.get("executionContexts", []):
+                if ctx.get("evolvedFrom") == "offline-execution":
+                    evolved_skills.append(skill)
+                    break
+        for es in evolved_skills:
+            sid = es.get("skillId", "unknown")
+            ts = int(datetime.datetime.now().timestamp() * 1000)
+            path = "evolved_skills/{}-{}.json".format(sid, ts)
+            zf.writestr(path,
+                        json.dumps(es, indent=2, ensure_ascii=False))
+
+        # execution.log
+        zf.writestr("execution.log", logger.get_log_text())
+
+    return zip_filename
+
+
+# ---------------------------------------------------------------------------
+# Main Entry Point
+# ---------------------------------------------------------------------------
+
+def main():
+    """Main entry point."""
+    execution_started_at = datetime.datetime.now().isoformat()
+
+    skills = load_skills()
+    rules = load_rules()
+
+    # Filter skills by environment variable SKILL_IDS
+    skill_filter = os.environ.get("SKILL_IDS", "")
+    if skill_filter:
+        allowed_ids = set(s.strip() for s in skill_filter.split(",") if s.strip())
+        skills = [s for s in skills if s.get("skillId") in allowed_ids]
+        if not skills:
+            logger.error("No matching skills found for SKILL_IDS={}".format(
+                skill_filter))
+            sys.exit(1)
+        logger.info("Filtered to {} skill(s) via SKILL_IDS".format(len(skills)))
+
+    logger.info("Container Security Agent - Offline Detection")
+    logger.info("Task ID: {}".format(_TASK_ID))
+    logger.info("Script Version: {}".format(_SCRIPT_VERSION))
+    logger.info("Skills: {}".format(len(skills)))
+    logger.info("Rules: {}".format(len(rules)))
+    logger.info("Hostname: {}".format(platform.node()))
+    logger.info("Python: {}".format(sys.version))
+
+    # Phase 0: Environment fingerprint
+    fingerprint = collect_environment_fingerprint(skills)
+
+    # Phase 1: Execute each skill
+    all_skill_results = {}   # skillId -> (status, records)
+    for skill in skills:
+        skill_id = skill.get("skillId", "unknown")
+        try:
+            status, records = execute_detection_for_skill(
+                skill, fingerprint, rules, "execution_results")
+            all_skill_results[skill_id] = (status, records)
+        except Exception as e:
+            logger.error("[{}] Detection failed: {}".format(skill_id, str(e)))
+            traceback.print_exc()
+            all_skill_results[skill_id] = ("ERROR", [])
+
+    # Package results
+    zip_file = package_results(fingerprint, all_skill_results, {},
+                               execution_started_at)
+
+    # Summary
+    completed = sum(1 for s, _ in all_skill_results.values() if s == "COMPLETED")
+    skipped = sum(1 for s, _ in all_skill_results.values() if s == "SKIPPED")
+    errors = sum(1 for s, _ in all_skill_results.values() if s == "ERROR")
+
+    logger.info("======================================")
+    logger.info("Detection Complete!")
+    logger.info("  Completed: {}".format(completed))
+    logger.info("  Skipped:   {}".format(skipped))
+    logger.info("  Errors:    {}".format(errors))
+    logger.info("  Results:   {}".format(zip_file))
+    logger.info("======================================")
+
+    print("")
+    print("=" * 50)
+    print("  Detection complete. Results packaged in:")
+    print("  {}".format(zip_file))
+    print("")
+    print("  Please upload this ZIP file to the platform:")
+    print("  {} (POST multipart/form-data)".format(_UPLOAD_URL_HINT))
+    print("=" * 50)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

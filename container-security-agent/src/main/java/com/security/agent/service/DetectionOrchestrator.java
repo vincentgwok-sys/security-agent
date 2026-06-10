@@ -57,6 +57,122 @@ public class DetectionOrchestrator {
     }
 
     /**
+     * Execute offline replay for all skills — no SSH, uses pre-recorded results.
+     */
+    public List<SkillReport> executeOfflineReplay(DetectionTask task,
+                                                   List<SkillDefinition> skills,
+                                                   EnvironmentFingerprint fingerprint,
+                                                   Map<String, List<ExecutionRecord>> preRecordedResults) {
+        List<CompletableFuture<SkillReport>> futures = skills.stream()
+                .map(skill -> CompletableFuture.supplyAsync(() ->
+                        replaySkillDetection(skill, task, fingerprint,
+                                preRecordedResults.getOrDefault(
+                                        skill.getSkillId(), Collections.emptyList())),
+                        executor))
+                .collect(Collectors.toList());
+
+        return futures.stream()
+                .map(f -> {
+                    try {
+                        return f.get();
+                    } catch (Exception e) {
+                        log.error("线下回放 Skill 异常: {}", e.getMessage(), e);
+                        return buildExceptionReport("unknown", e.getMessage());
+                    }
+                })
+                .collect(Collectors.toList());
+    }
+
+    private SkillReport replaySkillDetection(SkillDefinition skill, DetectionTask task,
+                                              EnvironmentFingerprint targetEnv,
+                                              List<ExecutionRecord> preRecords) {
+        String skillId = skill.getSkillId();
+        log.info("[{}] ===== 线下回放开始 =====", skillId);
+
+        // Phase 0.5: Context selection (using merged skills)
+        Optional<ExecutionContext> matchedCtx = skillLoader.selectBestContext(skill, targetEnv);
+        ExecutionContext activeContext;
+        if (matchedCtx.isPresent()) {
+            activeContext = matchedCtx.get();
+            log.info("[{}] 使用 Context: {}", skillId, activeContext.getContextId());
+        } else {
+            log.warn("[{}] 无匹配 Context，使用第一个可用 Context 继续", skillId);
+            List<ExecutionContext> ctxs = skill.getExecutionContexts();
+            if (ctxs == null || ctxs.isEmpty()) {
+                return buildContextEvolutionFailedReport(skill, targetEnv);
+            }
+            // Filter deprecated
+            activeContext = ctxs.stream()
+                    .filter(c -> !c.isDeprecated())
+                    .findFirst()
+                    .orElse(ctxs.get(0));
+        }
+
+        // Phase 1: Replay AI judgement — no SSH execution
+        List<ExecutionRecord> records = new ArrayList<>();
+        String finalStatus = "PASS";
+
+        int cmdIndex = 0;
+        for (ExecutionRecord preRecord : preRecords) {
+            String command = preRecord.getCommand();
+            ExecutionResult result = preRecord.getResult();
+
+            if (result == null) {
+                log.warn("[{}] pre-record result is null for command: {}", skillId, command);
+                continue;
+            }
+
+            log.info("[{}] 回放判定 [{}/{}]: {}",
+                    skillId, cmdIndex + 1, preRecords.size(), command);
+
+            // Re-run AI judgement against the pre-recorded output
+            AiVerdict verdict = aiClient.judgeExecution(skill, activeContext, targetEnv,
+                    command, cmdIndex, preRecords.size(), result, task.getTaskId());
+
+            ExecutionRecord record = ExecutionRecord.builder()
+                    .command(command)
+                    .result(result)
+                    .verdict(verdict)
+                    .round(0)
+                    .build();
+            records.add(record);
+
+            log.info("[{}] AI 判定: {}", skillId, verdict.getStatus());
+
+            switch (verdict.getStatus()) {
+                case "PASS":
+                    cmdIndex++;
+                    break;
+                case "FAIL":
+                    finalStatus = "FAIL";
+                    cmdIndex++;
+                    break;
+                case "EVOLVE":
+                    // Offline mode: record but don't execute alternative command
+                    log.info("[{}] EVOLVE 判定——线下模式不执行替代命令", skillId);
+                    cmdIndex++;
+                    break;
+                case "ENV_MISMATCH":
+                    // Offline mode: record but don't evolve context
+                    log.info("[{}] ENV_MISMATCH 判定——线下模式不执行上下文进化", skillId);
+                    cmdIndex++;
+                    break;
+                default:
+                    cmdIndex++;
+                    break;
+            }
+        }
+
+        // Phase 2: Report generation
+        log.info("[{}] 回放完成，最终状态={}, 生成报告...", skillId, finalStatus);
+        AiReportResponse report = aiClient.generateReport(skill, activeContext, targetEnv,
+                finalStatus, false, false, records, task.getTaskId());
+
+        return assembleSkillReport(skill, activeContext, targetEnv, finalStatus,
+                false, "none", records, report);
+    }
+
+    /**
      * Execute detection for all selected skills in parallel.
      */
     public List<SkillReport> executeDetection(List<SkillDefinition> skills, DetectionTask task) {

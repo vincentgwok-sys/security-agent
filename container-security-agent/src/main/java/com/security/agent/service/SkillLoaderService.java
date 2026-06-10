@@ -223,4 +223,84 @@ public class SkillLoaderService {
     public Map<String, SkillDefinition> getSkillCache() {
         return Collections.unmodifiableMap(skillCache);
     }
+
+    /**
+     * Merge an uploaded skill (from offline execution) into the platform skill.
+     * New execution contexts are appended and marked "offline-execution".
+     * Returns the merged SkillDefinition, or null if nothing changed.
+     */
+    public SkillDefinition mergeUploadedSkill(SkillDefinition uploaded) {
+        String skillId = uploaded.getSkillId();
+        if (skillId == null || skillId.isBlank()) return null;
+
+        Map<String, SkillDefinition> platformSkills = loadLatestSkills();
+        SkillDefinition platform = platformSkills.get(skillId);
+
+        if (platform == null) {
+            // Brand new skill — persist directly
+            log.info("[{}] 全新 Skill 导入，来自线下执行", skillId);
+            uploaded.setEvolutionCount(0);
+            uploaded.setVersionTimestamp(System.currentTimeMillis());
+            for (ExecutionContext ctx : uploaded.getExecutionContexts()) {
+                ctx.setEvolvedFrom("offline-execution");
+                ctx.setEvolvedAt(System.currentTimeMillis());
+            }
+            saveEvolvedSkill(uploaded);
+            return uploaded;
+        }
+
+        // Merge execution contexts
+        boolean changed = false;
+        for (ExecutionContext uploadedCtx : uploaded.getExecutionContexts()) {
+            boolean isDuplicate = false;
+            for (ExecutionContext platformCtx : platform.getExecutionContexts()) {
+                if (isDuplicateContext(uploadedCtx, platformCtx)) {
+                    isDuplicate = true;
+                    log.info("[{}] Context {} 与已有 Context {} 重复，跳过",
+                            skillId, uploadedCtx.getContextId(), platformCtx.getContextId());
+                    break;
+                }
+            }
+            if (!isDuplicate) {
+                uploadedCtx.setEvolvedFrom("offline-execution");
+                uploadedCtx.setEvolvedAt(System.currentTimeMillis());
+                uploadedCtx.setDeprecated(false);
+                platform.getExecutionContexts().add(uploadedCtx);
+                changed = true;
+                log.info("[{}] 新增 offline Context: {}", skillId, uploadedCtx.getContextId());
+            }
+        }
+
+        if (changed) {
+            platform.setEvolutionCount(platform.getEvolutionCount() + 1);
+            return saveEvolvedSkill(platform);
+        }
+        return platform;
+    }
+
+    private boolean isDuplicateContext(ExecutionContext a, ExecutionContext b) {
+        EnvironmentFingerprint fa = a.getEnvironmentFingerprint();
+        EnvironmentFingerprint fb = b.getEnvironmentFingerprint();
+        if (fa == null || fb == null) return false;
+
+        // osType must match
+        boolean osMatch = fa.getOsType() != null
+                && fa.getOsType().equalsIgnoreCase(fb.getOsType());
+        if (!osMatch) return false;
+
+        // osFlavors must overlap
+        boolean flavorMatch = fa.getOsFlavors() != null && fb.getOsFlavors() != null
+                && fa.getOsFlavors().stream()
+                        .anyMatch(f -> fb.getOsFlavors().stream()
+                                .anyMatch(e -> e.equalsIgnoreCase(f)));
+        if (!flavorMatch) return false;
+
+        // requiredTools of uploaded must be a subset of platform
+        List<String> aTools = fa.getRequiredTools();
+        List<String> bTools = fb.getRequiredTools();
+        if (bTools == null || bTools.isEmpty()) return true;
+        if (aTools != null && bTools.containsAll(aTools)) return true;
+
+        return false;
+    }
 }

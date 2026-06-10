@@ -87,4 +87,27 @@ export function fetchAiLogs(taskId, skillId, page = 0, size = 50) {
   return api.get('/logs/ai', { params })
 }
 
+// ========== Offline Execution ==========
+export function downloadScript(taskId, token) {
+  return api.get(`/tasks/${taskId}/script/download`, {
+    params: { token },
+    responseType: 'blob'
+  })
+}
+
+export function uploadResults(taskId, file, onProgress) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post(`/tasks/${taskId}/results/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: onProgress
+  })
+}
+
+export function downloadResultZip(taskId) {
+  return api.get(`/tasks/${taskId}/results/download`, {
+    responseType: 'blob'
+  })
+}
+
 export default api

@@ -15,7 +15,8 @@
         <thead>
           <tr>
             <th>任务 ID</th>
-            <th>目标 IP</th>
+            <th>连接方式</th>
+            <th>目标</th>
             <th>状态</th>
             <th>Skill 数</th>
             <th>创建时间</th>
@@ -25,37 +26,54 @@
         <tbody>
           <tr v-for="task in tasks" :key="task.taskId">
             <td><code>{{ task.taskId }}</code></td>
-            <td>{{ task.targetIp }}:{{ task.sshPort || 22 }}</td>
-            <td><StatusBadge :status="task.status" /></td>
+            <td><span class="conn-icon">{{ connIcon(task.connectionType) }}</span></td>
+            <td>{{ connTarget(task) }}</td>
+            <td><StatusBadge :status="task.status" :connectionType="task.connectionType" /></td>
             <td>{{ task.skillIds?.length || 0 }}</td>
             <td>{{ formatTime(task.createdAt) }}</td>
             <td>
               <div style="display: flex; gap: 6px;">
+                <!-- Completed: view report -->
                 <router-link :to="`/report/${task.taskId}`" class="btn btn-sm btn-success" v-if="task.status === 'COMPLETED'">
                   查看报告
                 </router-link>
-                <span v-else-if="task.status === 'RUNNING'" class="btn btn-sm btn-secondary" style="cursor: default; opacity: .6;">
+                <!-- Online running/created -->
+                <span v-else-if="task.status === 'RUNNING' && task.connectionType !== 'offline'" class="btn btn-sm btn-secondary" style="cursor: default; opacity: .6;">
                   检测中...
                 </span>
-                <span v-else-if="task.status === 'CREATED'" class="btn btn-sm btn-secondary" style="cursor: default; opacity: .6;">
+                <span v-else-if="task.status === 'CREATED' && task.connectionType !== 'offline'" class="btn btn-sm btn-secondary" style="cursor: default; opacity: .6;">
                   等待中
                 </span>
+                <!-- Offline: upload button -->
+                <button class="btn btn-sm" style="background: #2563eb; color: #fff;"
+                  v-if="task.connectionType === 'offline' && (task.status === 'CREATED' || task.status === 'SCRIPT_DOWNLOADED')"
+                  @click="showUploadDialog(task.taskId)">
+                  📤 上传结果
+                </button>
+                <!-- Offline analyzing -->
+                <span v-else-if="task.status === 'ANALYZING'" class="btn btn-sm btn-secondary" style="cursor: default; opacity: .6;">
+                  分析中...
+                </span>
+                <!-- Logs -->
                 <router-link :to="`/logs/${task.taskId}`" class="btn btn-sm"
                   style="background: #6366f1; color: #fff;" v-if="task.status !== 'CREATED'">
                   查看日志
                 </router-link>
+                <!-- Cancel (online only) -->
                 <button class="btn btn-sm" style="background: #dc2626; color: #fff;"
-                  v-if="task.status === 'RUNNING' || task.status === 'CREATED'"
+                  v-if="(task.status === 'RUNNING' || task.status === 'CREATED') && task.connectionType !== 'offline'"
                   :disabled="cancelling === task.taskId"
                   @click="cancelTask(task)">
                   {{ cancelling === task.taskId ? '终止中...' : '终止' }}
                 </button>
+                <!-- Retry (online only) -->
                 <button class="btn btn-sm" style="background: #f59e0b; color: #fff;"
-                  v-if="(task.status === 'INTERRUPTED' || task.status === 'FAILED') && !isRetried(task.taskId)"
+                  v-if="(task.status === 'INTERRUPTED' || task.status === 'FAILED') && task.connectionType !== 'offline' && !isRetried(task.taskId)"
                   :disabled="retrying === task.taskId"
                   @click="retryTask(task)">
                   {{ retrying === task.taskId ? '重试中...' : '重试' }}
                 </button>
+                <!-- Delete -->
                 <button class="btn btn-sm btn-secondary"
                   v-if="task.status === 'COMPLETED' || task.status === 'INTERRUPTED' || task.status === 'FAILED'"
                   :disabled="deleting === task.taskId"
@@ -78,13 +96,26 @@
     <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
       <button class="btn btn-sm btn-secondary" @click="refresh" :disabled="loading">刷新</button>
     </div>
+
+    <!-- Upload dialog -->
+    <UploadDialog
+      v-if="showUpload"
+      :taskId="uploadTaskId"
+      :progress="uploadProgress"
+      :error="uploadError"
+      :uploading="uploading"
+      @upload="handleUpload"
+      @close="showUpload = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { listTasks, getTask, createTask, cancelTask as apiCancelTask, deleteTask as apiDeleteTask } from '../api'
+import { listTasks, getTask, createTask, cancelTask as apiCancelTask,
+         deleteTask as apiDeleteTask, uploadResults } from '../api'
 import StatusBadge from '../components/StatusBadge.vue'
+import UploadDialog from '../components/UploadDialog.vue'
 
 const tasks = ref([])
 const loading = ref(true)
@@ -93,6 +124,48 @@ const totalPages = ref(0)
 const retrying = ref(null)
 const cancelling = ref(null)
 const deleting = ref(null)
+
+// Upload dialog state
+const uploadTaskId = ref(null)
+const showUpload = ref(false)
+const uploading = ref(false)
+const uploadProgress = ref(0)
+const uploadError = ref('')
+
+function connIcon(type) {
+  if (type === 'kubectl') return '⎈'
+  if (type === 'offline') return '📥'
+  return '🔗'
+}
+
+function connTarget(task) {
+  if (task.connectionType === 'offline') return '线下执行'
+  return (task.targetIp || '?') + ':' + (task.sshPort || 22)
+}
+
+function showUploadDialog(taskId) {
+  uploadTaskId.value = taskId
+  uploadError.value = ''
+  uploadProgress.value = 0
+  showUpload.value = true
+}
+
+async function handleUpload(file) {
+  uploading.value = true
+  uploadError.value = ''
+  uploadProgress.value = 0
+  try {
+    await uploadResults(uploadTaskId.value, file, (e) => {
+      uploadProgress.value = Math.round(e.loaded / e.total * 100)
+    })
+    showUpload.value = false
+    fetchTasks()
+  } catch (e) {
+    uploadError.value = e.response?.data?.error || e.message || '上传失败'
+  } finally {
+    uploading.value = false
+  }
+}
 
 async function fetchTasks() {
   loading.value = true

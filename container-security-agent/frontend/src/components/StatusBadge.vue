@@ -1,9 +1,39 @@
 <template>
-  <span class="status-badge" :class="'badge-' + status.toLowerCase()">{{ status }}</span>
+  <span class="status-badge" :class="'badge-' + normalized">{{ label }}</span>
 </template>
 
 <script setup>
-defineProps({ status: { type: String, required: true } })
+import { computed } from 'vue'
+
+const props = defineProps({
+  status: { type: String, required: true },
+  connectionType: { type: String, default: null }
+})
+
+const offlineLabels = {
+  'CREATED': '等待下载',
+  'SCRIPT_DOWNLOADED': '等待执行',
+  'RESULTS_UPLOADED': '已上传',
+  'ANALYZING': '分析中'
+}
+
+const label = computed(() => {
+  if (props.connectionType === 'offline' && offlineLabels[props.status]) {
+    return offlineLabels[props.status]
+  }
+  if (props.status === 'CREATED') return '等待中'
+  if (props.status === 'RUNNING') return '检测中'
+  if (props.status === 'INTERRUPTED') return '已中断'
+  if (props.status === 'FAILED') return '失败'
+  if (props.status === 'COMPLETED') return '已完成'
+  return props.status
+})
+
+const normalized = computed(() => {
+  if (props.status === 'ANALYZING') return 'running'
+  if (props.status === 'SCRIPT_DOWNLOADED' || props.status === 'RESULTS_UPLOADED') return 'created'
+  return props.status.toLowerCase()
+})
 </script>
 
 <style scoped>

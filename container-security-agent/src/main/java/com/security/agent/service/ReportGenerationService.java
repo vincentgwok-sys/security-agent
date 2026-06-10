@@ -72,12 +72,13 @@ public class ReportGenerationService {
 
         return ReportData.builder()
                 .taskId(task.getTaskId())
-                .targetIp(task.getTargetIp())
+                .targetIp(task.getTargetIp() != null ? task.getTargetIp() : "线下执行")
                 .auditTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
                 .overallScore(overallScore)
                 .passRate(passRate)
                 .targetEnvironment(targetEnv)
                 .skillReports(skillReports)
+                .connectionType(task.getConnectionType() != null ? task.getConnectionType() : "ssh")
                 .build();
     }
 

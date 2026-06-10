@@ -3,7 +3,7 @@ spring:
     name: container-security-agent
   ai:
     openai:
-      api-key: sk-5d66e5f7896243e3a3629bb0fb76ffe9
+      api-key: sk-9e76dfc6bc5f42f7836d954d11598a20
       base-url: https://api.deepseek.com
       chat:
         options:

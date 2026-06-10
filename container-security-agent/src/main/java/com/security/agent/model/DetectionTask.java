@@ -28,4 +28,7 @@ public class DetectionTask {
     private String connectionType;   // "ssh" (default) or "kubectl"
     private String targetPod;        // for kubectl mode: pod name
     private String targetNamespace;  // for kubectl mode: namespace
+    private String offlineDownloadToken;  // one-time token for script download
+    private LocalDateTime scriptDownloadedAt;
+    private LocalDateTime resultUploadedAt;
 }

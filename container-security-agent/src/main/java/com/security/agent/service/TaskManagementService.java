@@ -16,6 +16,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -31,7 +32,8 @@ public class TaskManagementService {
 
     private final ObjectMapper objectMapper;
     private final Map<String, DetectionTask> taskStore = new ConcurrentHashMap<>();
-    private final Map<String, java.util.concurrent.CompletableFuture<?>> runningFutures = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<?>> runningFutures = new ConcurrentHashMap<>();
+    private final Map<String, String> scriptCache = new ConcurrentHashMap<>();
     private final AtomicInteger dailySeq = new AtomicInteger(0);
     private volatile String currentDate = "";
     private Path reportsDir;
@@ -67,7 +69,9 @@ public class TaskManagementService {
                 try {
                     DetectionTask task = objectMapper.readValue(file.toFile(), DetectionTask.class);
                     // 服务重启后，未完成的任务标记为中断
-                    if (task.getStatus() == TaskStatus.RUNNING || task.getStatus() == TaskStatus.CREATED) {
+                    if (task.getStatus() == TaskStatus.RUNNING
+                            || task.getStatus() == TaskStatus.CREATED
+                            || task.getStatus() == TaskStatus.ANALYZING) {
                         task.setStatus(TaskStatus.INTERRUPTED);
                         task.setErrorMessage("服务重启，检测中断");
                         task.setUpdatedAt(LocalDateTime.now());
@@ -211,8 +215,72 @@ public class TaskManagementService {
     /**
      * Register a running task's CompletableFuture for cancellation.
      */
-    public void registerRunningTask(String taskId, java.util.concurrent.CompletableFuture<?> future) {
+    public void registerRunningTask(String taskId, CompletableFuture<?> future) {
         runningFutures.put(taskId, future);
+    }
+
+    /**
+     * Generate a one-time download token for an offline task.
+     */
+    public String generateOfflineToken(String taskId) {
+        DetectionTask task = taskStore.get(taskId);
+        if (task == null) return null;
+        String token = UUID.randomUUID().toString();
+        task.setOfflineDownloadToken(token);
+        task.setConnectionType("offline");
+        persistTask(task);
+        return token;
+    }
+
+    /**
+     * Validate the download token and mark script as downloaded.
+     * Returns true if token is valid and marks state; false otherwise.
+     */
+    public boolean validateAndConsumeToken(String taskId, String token) {
+        DetectionTask task = taskStore.get(taskId);
+        if (task == null || task.getOfflineDownloadToken() == null) return false;
+        if (!task.getOfflineDownloadToken().equals(token)) return false;
+        if (task.getStatus() != TaskStatus.CREATED) return false;
+
+        task.setOfflineDownloadToken(null); // consume the token
+        task.setScriptDownloadedAt(LocalDateTime.now());
+        task.setStatus(TaskStatus.SCRIPT_DOWNLOADED);
+        task.setUpdatedAt(LocalDateTime.now());
+        persistTask(task);
+        return true;
+    }
+
+    /**
+     * Store script content in memory cache.
+     */
+    public void cacheScript(String taskId, String scriptContent) {
+        scriptCache.put(taskId, scriptContent);
+    }
+
+    /**
+     * Retrieve cached script content.
+     */
+    public String getCachedScript(String taskId) {
+        return scriptCache.get(taskId);
+    }
+
+    /**
+     * Remove cached script after download.
+     */
+    public void removeCachedScript(String taskId) {
+        scriptCache.remove(taskId);
+    }
+
+    /**
+     * Update task status to RESULTS_UPLOADED after successful ZIP upload.
+     */
+    public void markResultsUploaded(String taskId) {
+        DetectionTask task = taskStore.get(taskId);
+        if (task == null) return;
+        task.setStatus(TaskStatus.RESULTS_UPLOADED);
+        task.setResultUploadedAt(LocalDateTime.now());
+        task.setUpdatedAt(LocalDateTime.now());
+        persistTask(task);
     }
 
     /**

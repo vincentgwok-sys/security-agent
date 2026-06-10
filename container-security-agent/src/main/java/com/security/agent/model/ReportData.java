@@ -20,4 +20,5 @@ public class ReportData {
     private String passRate;
     private EnvironmentFingerprint targetEnvironment;
     private List<SkillReport> skillReports;
+    private String connectionType;  // "ssh", "kubectl", or "offline"
 }

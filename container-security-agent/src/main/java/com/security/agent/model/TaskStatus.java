@@ -5,5 +5,8 @@ public enum TaskStatus {
     RUNNING,
     COMPLETED,
     FAILED,
-    INTERRUPTED
+    INTERRUPTED,
+    SCRIPT_DOWNLOADED,
+    RESULTS_UPLOADED,
+    ANALYZING
 }
