@@ -255,7 +255,7 @@ public class TaskManagementService {
 
     // ──── Persistence ────
 
-    private void persistTask(DetectionTask task) {
+    public void persistTask(DetectionTask task) {
         Path filePath = reportsDir.resolve(task.getTaskId() + ".task.json");
         try {
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(filePath.toFile(), task);

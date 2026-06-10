@@ -31,16 +31,29 @@ public class DetectionOrchestrator {
     private final SkillLoaderService skillLoader;
     private final AiClientService aiClient;
     private final AiLogService aiLogService;
+    private final KubectlService kubectlService;
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
 
     public DetectionOrchestrator(SshExecutionService sshService,
                                   SkillLoaderService skillLoader,
                                   AiClientService aiClient,
-                                  AiLogService aiLogService) {
+                                  AiLogService aiLogService,
+                                  KubectlService kubectlService) {
         this.sshService = sshService;
         this.skillLoader = skillLoader;
         this.aiClient = aiClient;
         this.aiLogService = aiLogService;
+        this.kubectlService = kubectlService;
+    }
+
+    /**
+     * Wrap command for kubectl exec if the task uses kubectl connection type.
+     */
+    private String wrapCommand(DetectionTask task, String command) {
+        if ("kubectl".equals(task.getConnectionType())) {
+            return kubectlService.wrapCommand(task.getTargetPod(), task.getTargetNamespace(), command);
+        }
+        return command;
     }
 
     /**
@@ -74,7 +87,7 @@ public class DetectionOrchestrator {
         String pwd = task.getSshPassword();
 
         // ── Phase 0: Environment fingerprint collection ──
-        EnvironmentFingerprint targetEnv = collectEnvironmentFingerprint(skill, ip, port, user, pwd);
+        EnvironmentFingerprint targetEnv = collectEnvironmentFingerprint(skill, task, ip, port, user, pwd);
         log.info("[{}] 环境指纹: OS={}/{}, Shell={}, 可用工具={}",
                 skillId, targetEnv.getOsType(),
                 targetEnv.getOsFlavors() != null ? String.join(",", targetEnv.getOsFlavors()) : "N/A",
@@ -91,7 +104,7 @@ public class DetectionOrchestrator {
             log.info("[{}] 使用已有 Context: {}", skillId, activeContext.getContextId());
         } else {
             log.info("[{}] 无匹配 Context，启动上下文进化...", skillId);
-            activeContext = evolveNewContext(skill, targetEnv, ip, port, user, pwd, task.getTaskId());
+            activeContext = evolveNewContext(skill, targetEnv, task, ip, port, user, pwd, task.getTaskId());
             if (activeContext == null) {
                 return buildContextEvolutionFailedReport(skill, targetEnv);
             }
@@ -123,11 +136,13 @@ public class DetectionOrchestrator {
                     throw new RuntimeException("检测已取消", new InterruptedException("任务已终止"));
                 }
 
+                String wrappedCommand = wrapCommand(task, currentCommand);
                 log.info("[{}] 执行命令 [{}/{}] round={}: {}",
-                        skillId, cmdIndex + 1, commands.size(), round, currentCommand);
+                        skillId, cmdIndex + 1, commands.size(), round,
+                        "kubectl".equals(task.getConnectionType()) ? wrappedCommand : currentCommand);
 
                 ExecutionResult result = sshService.execute(
-                        ip, port, user, pwd, currentCommand, commandTimeout);
+                        ip, port, user, pwd, wrappedCommand, commandTimeout);
 
                 if (result.isBlocked()) {
                     log.warn("[{}] 命令被规则引擎拦截: {}", skillId, currentCommand);
@@ -202,7 +217,7 @@ public class DetectionOrchestrator {
                         log.warn("[{}] Context {} 环境不匹配，重新进化 ({}/{})",
                                 skillId, activeContext.getContextId(),
                                 contextEvolutionCount, maxContextEvolutions);
-                        ExecutionContext newCtx = evolveNewContext(skill, targetEnv, ip, port, user, pwd, task.getTaskId());
+                        ExecutionContext newCtx = evolveNewContext(skill, targetEnv, task, ip, port, user, pwd, task.getTaskId());
                         if (newCtx == null) break;
                         activeContext = newCtx;
                         skill.getExecutionContexts().add(activeContext);
@@ -242,26 +257,27 @@ public class DetectionOrchestrator {
     }
 
     private EnvironmentFingerprint collectEnvironmentFingerprint(
-            SkillDefinition skill, String ip, int port, String user, String pwd) {
+            SkillDefinition skill, DetectionTask task, String ip, int port, String user, String pwd) {
 
         Set<String> allProbes = skill.getExecutionContexts().stream()
                 .flatMap(ctx -> ctx.getEnvCheckCommands().stream())
                 .collect(Collectors.toSet());
 
         String combined = String.join("; echo '---NEXT_PROBE---'; ", allProbes);
+        combined = wrapCommand(task, combined);
         ExecutionResult result = sshService.executeRaw(ip, port, user, pwd, combined, 30);
 
         return EnvironmentFingerprint.fromProbeResult(result);
     }
 
     private ExecutionContext evolveNewContext(SkillDefinition skill, EnvironmentFingerprint targetEnv,
-                                               String ip, int port, String user, String pwd, String taskId) {
+                                               DetectionTask task, String ip, int port, String user, String pwd, String taskId) {
         if (skillLoader.contextExistsForEnvironment(skill, targetEnv)) {
             log.info("[{}] 已存在匹配当前环境的 context，跳过进化", skill.getSkillId());
             return skillLoader.selectBestContext(skill, targetEnv).orElse(null);
         }
 
-        String rawEnvOutput = collectRawEnvOutput(skill, ip, port, user, pwd);
+        String rawEnvOutput = collectRawEnvOutput(skill, task, ip, port, user, pwd);
         ExecutionContext newCtx = aiClient.evolveNewContext(skill, targetEnv, rawEnvOutput, taskId);
 
         if (newCtx == null) {
@@ -277,11 +293,12 @@ public class DetectionOrchestrator {
         return newCtx;
     }
 
-    private String collectRawEnvOutput(SkillDefinition skill, String ip, int port, String user, String pwd) {
+    private String collectRawEnvOutput(SkillDefinition skill, DetectionTask task, String ip, int port, String user, String pwd) {
         Set<String> allProbes = skill.getExecutionContexts().stream()
                 .flatMap(ctx -> ctx.getEnvCheckCommands().stream())
                 .collect(Collectors.toSet());
         String combined = String.join("; echo '---NEXT_PROBE---'; ", allProbes);
+        combined = wrapCommand(task, combined);
         ExecutionResult result = sshService.executeRaw(ip, port, user, pwd, combined, 30);
         return result.getStdout() + "\n" + result.getStderr();
     }

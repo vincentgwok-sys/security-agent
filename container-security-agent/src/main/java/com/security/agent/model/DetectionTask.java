@@ -25,4 +25,7 @@ public class DetectionTask {
     private LocalDateTime updatedAt;
     private String errorMessage;
     private String parentTaskId;
+    private String connectionType;   // "ssh" (default) or "kubectl"
+    private String targetPod;        // for kubectl mode: pod name
+    private String targetNamespace;  // for kubectl mode: namespace
 }

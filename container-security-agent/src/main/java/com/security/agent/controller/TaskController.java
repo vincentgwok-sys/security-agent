@@ -61,6 +61,15 @@ public class TaskController {
                 request.skillIds(),
                 request.parentTaskId());
 
+        // Set kubectl fields if using jumpbox mode
+        if ("kubectl".equals(request.connectionType())) {
+            task.setConnectionType("kubectl");
+            task.setTargetPod(request.targetPod());
+            task.setTargetNamespace(request.targetNamespace());
+            taskService.persistTask(task);
+            log.info("任务使用 kubectl 模式: pod={}, namespace={}", request.targetPod(), request.targetNamespace());
+        }
+
         // Async launch detection
         CompletableFuture<?> detectionFuture = CompletableFuture.runAsync(() -> {
             try {
@@ -186,5 +195,8 @@ public class TaskController {
             @NotBlank String sshPassword,
             Integer sshPort,
             @NotEmpty List<String> skillIds,
-            String parentTaskId) {}
+            String parentTaskId,
+            String connectionType,
+            String targetPod,
+            String targetNamespace) {}
 }

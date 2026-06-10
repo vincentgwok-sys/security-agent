@@ -22,4 +22,7 @@ defineProps({ status: { type: String, required: true } })
 .badge-running { background: #fefce8; color: #a16207; }
 .badge-completed { background: #dcfce7; color: #166534; }
 .badge-interrupted { background: #f3f4f6; color: #6b7280; }
+.badge-pending { background: #fefce8; color: #a16207; }
+.badge-succeeded { background: #dcfce7; color: #166534; }
+.badge-unknown { background: #f3f4f6; color: #9ca3af; }
 </style>

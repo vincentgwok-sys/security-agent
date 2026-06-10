@@ -53,6 +53,11 @@ export function reloadSkills() {
   return api.post('/skills/reload')
 }
 
+// ========== Kubectl ==========
+export function listKubectlPods(data) {
+  return api.post('/kubectl/pods', data)
+}
+
 // ========== Task actions ==========
 export function cancelTask(taskId) {
   return api.post(`/tasks/${taskId}/cancel`)
