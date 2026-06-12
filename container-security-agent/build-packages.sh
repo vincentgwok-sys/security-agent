@@ -468,34 +468,9 @@ rm -rf "container-security-agent-frontend-${VERSION}"
 cd "$SCRIPT_DIR"
 echo "    前端打包完成"
 
-# ── 6.5 生成 run.sh ──
+# ── 6.5 复制 run.sh ──
 echo "==> 生成 run.sh 一键启动脚本..."
-cat > "release/run.sh" << 'RUNEOF'
-#!/usr/bin/env bash
-# Container Security Agent — 容器一键启动脚本
-# 如果非 bash 环境（如 sh/dash），自动重新调用 bash 执行
-if [ -z "${BASH_VERSION:-}" ]; then
-    exec bash "$0" "$@"
-fi
-set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BACKEND_DIR="$SCRIPT_DIR/container-security-agent-backend-__VERSION__"
-BACKEND_TAR="$SCRIPT_DIR/container-security-agent-backend-__VERSION__.tar.gz"
-
-# 自动解压（如果尚未解压）
-if [ ! -d "$BACKEND_DIR" ]; then
-    if [ ! -f "$BACKEND_TAR" ]; then
-        echo "[ERROR] 未找到后端包: $BACKEND_TAR"
-        exit 1
-    fi
-    echo "[INFO] 首次运行，正在解压 $BACKEND_TAR ..."
-    tar xzf "$BACKEND_TAR" -C "$SCRIPT_DIR"
-    echo "[INFO] 解压完成"
-fi
-
-cd "$BACKEND_DIR"
-exec ./start.sh "$@"
-RUNEOF
+cp "$SCRIPT_DIR/run.sh.template" release/run.sh
 sed -i "s/__VERSION__/${VERSION}/g" release/run.sh
 chmod +x release/run.sh
 echo "    run.sh 生成完成"

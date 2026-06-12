@@ -294,7 +294,8 @@ echo     前端打包完成
 
 :: ── 6.5 生成 run.sh ──
 echo ==> 生成 run.sh 一键启动脚本...
-powershell -Command "$lf=\"`n\"; $s='#!/usr/bin/env bash'+$lf+'if [ -z \"${BASH_VERSION:-}\" ]; then exec bash \"$0\" \"$@\"; fi'+$lf+'set -euo pipefail'+$lf+'SCRIPT_DIR=\"$(cd \"$(dirname \"$0\")\" && pwd)\"'+$lf+'BACKEND_DIR=\"$SCRIPT_DIR/container-security-agent-backend-%VERSION%\"'+$lf+'BACKEND_TAR=\"$SCRIPT_DIR/container-security-agent-backend-%VERSION%.tar.gz\"'+$lf+'if [ ! -d \"$BACKEND_DIR\" ]; then'+$lf+'  if [ ! -f \"$BACKEND_TAR\" ]; then echo \"[ERROR] 未找到后端包: $BACKEND_TAR\"; exit 1; fi'+$lf+'  echo \"[INFO] 首次运行，正在解压 $BACKEND_TAR ...\"'+$lf+'  tar xzf \"$BACKEND_TAR\" -C \"$SCRIPT_DIR\"'+$lf+'  echo \"[INFO] 解压完成\"'+$lf+'fi'+$lf+'cd \"$BACKEND_DIR\"'+$lf+'exec ./start.sh \"$@\"'; [System.IO.File]::WriteAllText('release\run.sh', $s)"
+copy "run.sh.template" "release\run.sh" >nul
+powershell -Command "(Get-Content 'release\run.sh') -replace '__VERSION__', '%VERSION%' | Set-Content 'release\run.sh' -NoNewline"
 
 :: ── 7. 完成 ──
 echo.
