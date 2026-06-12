@@ -50,7 +50,7 @@ cp -r rules "$BACKEND_DIR/"
 
 # ── 生成后端 start.sh ──
 cat > "$BACKEND_DIR/start.sh" << 'STARTEOF'
-#!/bin/bash
+#!/usr/bin/env bash
 # Container Security Agent — 后端启动脚本
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -123,7 +123,7 @@ echo "报告目录: $SCRIPT_DIR/reports/"
 echo "按 Ctrl+C 停止服务"
 echo ""
 
-"$JAVA_BIN" -jar "$SCRIPT_DIR/container-security-agent-__VERSION__.jar"
+exec "$JAVA_BIN" -jar "$SCRIPT_DIR/container-security-agent-__VERSION__.jar"
 STARTEOF
 
 # 替换版本号占位符
@@ -194,7 +194,7 @@ if not exist "%SCRIPT_DIR%reports" mkdir "%SCRIPT_DIR%reports"
 :: 首次运行：复制配置模板
 if not exist "%SCRIPT_DIR%application.yml" (
     echo [INFO] 首次运行，从 application-example.yml 复制配置模板...
-    copy "%SCRIPT_DIR%application-example.yml" "%SCRIPT_DIR%application.yml" >nul
+    copy "%SCRIPT_DIR%application-example.yml" "%SCRIPT_DIR%application.yml"
     echo [INFO] >>> 请编辑 application.yml 填入你的 API Key，然后重新运行 start.bat <<<
     pause
     exit /b 0
@@ -277,7 +277,7 @@ cp -r frontend/dist/* "$FRONTEND_DIR/"
 
 # ── 生成前端 start.sh ──
 cat > "$FRONTEND_DIR/start.sh" << 'STARTEOF'
-#!/bin/bash
+#!/usr/bin/env bash
 # Container Security Agent — 前端启动脚本（静态文件服务）
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
