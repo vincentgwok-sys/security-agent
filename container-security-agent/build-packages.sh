@@ -480,6 +480,19 @@ fi
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/container-security-agent-backend-__VERSION__"
+BACKEND_TAR="$SCRIPT_DIR/container-security-agent-backend-__VERSION__.tar.gz"
+
+# 自动解压（如果尚未解压）
+if [ ! -d "$BACKEND_DIR" ]; then
+    if [ ! -f "$BACKEND_TAR" ]; then
+        echo "[ERROR] 未找到后端包: $BACKEND_TAR"
+        exit 1
+    fi
+    echo "[INFO] 首次运行，正在解压 $BACKEND_TAR ..."
+    tar xzf "$BACKEND_TAR" -C "$SCRIPT_DIR"
+    echo "[INFO] 解压完成"
+fi
+
 cd "$BACKEND_DIR"
 exec ./start.sh "$@"
 RUNEOF
