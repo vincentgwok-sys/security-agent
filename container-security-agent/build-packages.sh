@@ -55,14 +55,62 @@ cat > "$BACKEND_DIR/start.sh" << 'STARTEOF'
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# ── 默认值 ──
+USER_JDK=""
+USER_API_KEY=""
+USER_PORT=""
+
+# ── 参数解析 ──
+show_help() {
+    echo "用法: ./start.sh [选项]"
+    echo ""
+    echo "选项:"
+    echo "  --jdk <path>      指定 Java 可执行文件路径（最高优先级）"
+    echo "  --api-key <key>   指定 AI API Key，通过 JVM 系统属性传入"
+    echo "  --port <port>     指定服务端口，默认 8080"
+    echo "  --help, -h        显示此帮助信息"
+    echo ""
+    echo "JDK 查找优先级: --jdk > JAVA_HOME 环境变量 > .java_home 文件 > PATH"
+    echo ""
+    echo "示例:"
+    echo "  # 容器中运行"
+    echo "  ./start.sh --api-key sk-xxx --jdk /opt/jdk-21/bin/java"
+    echo ""
+    echo "  # 使用自定义端口"
+    echo "  ./start.sh --port 9090 --api-key sk-xxx"
+}
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --jdk)       USER_JDK="$2"; shift 2 ;;
+        --api-key)   USER_API_KEY="$2"; shift 2 ;;
+        --port)      USER_PORT="$2"; shift 2 ;;
+        --help|-h)   show_help; exit 0 ;;
+        *)           echo "未知参数: $1"; show_help; exit 1 ;;
+    esac
+done
+
 echo "============================================"
 echo " Container Security Agent (后端)"
 echo "============================================"
 
 # ── 定位 Java ──
-# 优先级: JAVA_HOME > .java_home 文件 > PATH 中的 java
+# 优先级: --jdk 参数 > JAVA_HOME > .java_home 文件 > PATH
 find_java() {
-    # 日志统一输出到 stderr，避免被 $(...) 捕获
+    # 0) CLI --jdk 参数（最高优先级）
+    if [ -n "$USER_JDK" ]; then
+        if [ ! -e "$USER_JDK" ]; then
+            echo "[ERROR] --jdk 指定的路径不存在: $USER_JDK" >&2
+            return 1
+        fi
+        if [ ! -x "$USER_JDK" ]; then
+            echo "[ERROR] --jdk 指定的路径不可执行: $USER_JDK" >&2
+            return 1
+        fi
+        echo "$USER_JDK"
+        echo "[INFO] 使用 --jdk 参数: $USER_JDK" >&2
+        return 0
+    fi
+
     # 1) 检查 JAVA_HOME 环境变量
     if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/java" ]; then
         echo "$JAVA_HOME/bin/java"
@@ -99,10 +147,10 @@ JAVA_BIN=$(find_java) || {
     echo "[ERROR] 未找到 Java (JDK 21+)"
     echo ""
     echo "请通过以下任一方式指定 Java 路径："
-    echo "  方式一（环境变量）：export JAVA_HOME=/path/to/jdk-21"
-    echo "  方式二（本地文件）：echo /path/to/jdk-21 > .java_home"
+    echo "  方式一（CLI 参数）：./start.sh --jdk /path/to/jdk-21/bin/java"
+    echo "  方式二（环境变量）：export JAVA_HOME=/path/to/jdk-21"
+    echo "  方式三（本地文件）：echo /path/to/jdk-21 > .java_home"
     echo ""
-    echo "当前 .java_home 文件位置: $SCRIPT_DIR/.java_home"
     exit 1
 }
 
@@ -117,13 +165,22 @@ if [ ! -f "$SCRIPT_DIR/application.yml" ]; then
   exit 0
 fi
 
-echo "启动服务: http://localhost:8080"
+# ── 构建 JVM 参数 ──
+JAVA_OPTS=""
+if [ -n "$USER_API_KEY" ]; then
+    JAVA_OPTS="$JAVA_OPTS -Dspring.ai.openai.api-key=$USER_API_KEY"
+fi
+if [ -n "$USER_PORT" ]; then
+    JAVA_OPTS="$JAVA_OPTS -Dserver.port=$USER_PORT"
+fi
+
+echo "启动服务: http://localhost:${USER_PORT:-8080}"
 echo "日志目录: $SCRIPT_DIR/logs/"
 echo "报告目录: $SCRIPT_DIR/reports/"
 echo "按 Ctrl+C 停止服务"
 echo ""
 
-exec "$JAVA_BIN" -jar "$SCRIPT_DIR/container-security-agent-__VERSION__.jar"
+exec "$JAVA_BIN" $JAVA_OPTS -jar "$SCRIPT_DIR/container-security-agent-__VERSION__.jar"
 STARTEOF
 
 # 替换版本号占位符
@@ -351,7 +408,7 @@ pause
 STARTEOF
 
 # ── 生成前端 README.txt ──
-cat > "$FRONTEND_DIR/README.txt" << READMEEOF
+cat > "$FRONTEND_DIR/README.txt" << 'READMEEOF'
 ============================================================
  Container Security Agent 前端 v__VERSION__
 ============================================================
@@ -403,6 +460,22 @@ tar czf "container-security-agent-frontend-${VERSION}.tar.gz" "container-securit
 rm -rf "container-security-agent-frontend-${VERSION}"
 cd "$SCRIPT_DIR"
 echo "    前端打包完成"
+
+# ── 6.5 生成 run.sh ──
+echo "==> 生成 run.sh 一键启动脚本..."
+cat > "release/run.sh" << 'RUNEOF'
+#!/usr/bin/env bash
+# Container Security Agent — 容器一键启动脚本
+# 用法: ./run.sh [--api-key sk-xxx] [--jdk /path/to/java] [--port 8080]
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$SCRIPT_DIR/container-security-agent-backend-__VERSION__"
+cd "$BACKEND_DIR"
+exec ./start.sh "$@"
+RUNEOF
+sed -i "s/__VERSION__/${VERSION}/g" release/run.sh
+chmod +x release/run.sh
+echo "    run.sh 生成完成"
 
 # ── 7. 完成 ──
 echo ""

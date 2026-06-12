@@ -28,6 +28,7 @@ public class DetectionOrchestrator {
     private int commandTimeout;
 
     private final SshExecutionService sshService;
+    private final LocalExecutionService localExecutionService;
     private final SkillLoaderService skillLoader;
     private final AiClientService aiClient;
     private final AiLogService aiLogService;
@@ -35,15 +36,48 @@ public class DetectionOrchestrator {
     private final ExecutorService executor = Executors.newFixedThreadPool(4);
 
     public DetectionOrchestrator(SshExecutionService sshService,
+                                  LocalExecutionService localExecutionService,
                                   SkillLoaderService skillLoader,
                                   AiClientService aiClient,
                                   AiLogService aiLogService,
                                   KubectlService kubectlService) {
         this.sshService = sshService;
+        this.localExecutionService = localExecutionService;
         this.skillLoader = skillLoader;
         this.aiClient = aiClient;
         this.aiLogService = aiLogService;
         this.kubectlService = kubectlService;
+    }
+
+    /**
+     * Check if the task runs in local mode (no SSH).
+     */
+    private boolean isLocal(DetectionTask task) {
+        return "local".equals(task.getConnectionType());
+    }
+
+    /**
+     * Execute a command — dispatches to local or SSH backend based on connectionType.
+     */
+    private ExecutionResult dispatchExecute(DetectionTask task,
+                                             String ip, int port, String user, String pwd,
+                                             String command, int timeout) {
+        if (isLocal(task)) {
+            return localExecutionService.execute(command, timeout);
+        }
+        return sshService.execute(ip, port, user, pwd, command, timeout);
+    }
+
+    /**
+     * Execute a raw command (bypassing rule engine) — dispatches to local or SSH.
+     */
+    private ExecutionResult dispatchExecuteRaw(DetectionTask task,
+                                                String ip, int port, String user, String pwd,
+                                                String command, int timeout) {
+        if (isLocal(task)) {
+            return localExecutionService.executeRaw(command, timeout);
+        }
+        return sshService.executeRaw(ip, port, user, pwd, command, timeout);
     }
 
     /**
@@ -257,8 +291,8 @@ public class DetectionOrchestrator {
                         skillId, cmdIndex + 1, commands.size(), round,
                         "kubectl".equals(task.getConnectionType()) ? wrappedCommand : currentCommand);
 
-                ExecutionResult result = sshService.execute(
-                        ip, port, user, pwd, wrappedCommand, commandTimeout);
+                ExecutionResult result = dispatchExecute(
+                        task, ip, port, user, pwd, wrappedCommand, commandTimeout);
 
                 if (result.isBlocked()) {
                     log.warn("[{}] 命令被规则引擎拦截: {}", skillId, currentCommand);
@@ -381,7 +415,7 @@ public class DetectionOrchestrator {
 
         String combined = String.join("; echo '---NEXT_PROBE---'; ", allProbes);
         combined = wrapCommand(task, combined);
-        ExecutionResult result = sshService.executeRaw(ip, port, user, pwd, combined, 30);
+        ExecutionResult result = dispatchExecuteRaw(task, ip, port, user, pwd, combined, 30);
 
         return EnvironmentFingerprint.fromProbeResult(result);
     }
@@ -415,7 +449,7 @@ public class DetectionOrchestrator {
                 .collect(Collectors.toSet());
         String combined = String.join("; echo '---NEXT_PROBE---'; ", allProbes);
         combined = wrapCommand(task, combined);
-        ExecutionResult result = sshService.executeRaw(ip, port, user, pwd, combined, 30);
+        ExecutionResult result = dispatchExecuteRaw(task, ip, port, user, pwd, combined, 30);
         return result.getStdout() + "\n" + result.getStderr();
     }
 

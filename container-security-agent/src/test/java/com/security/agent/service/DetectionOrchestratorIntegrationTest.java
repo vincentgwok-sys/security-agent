@@ -20,6 +20,7 @@ class DetectionOrchestratorIntegrationTest {
 
     private DetectionOrchestrator orchestrator;
     private SshExecutionService mockSsh;
+    private LocalExecutionService mockLocal;
     private SkillLoaderService mockSkillLoader;
     private AiClientService mockAi;
     private AiLogService mockAiLog;
@@ -29,13 +30,14 @@ class DetectionOrchestratorIntegrationTest {
     @BeforeEach
     void setUp() {
         mockSsh = mock(SshExecutionService.class);
+        mockLocal = mock(LocalExecutionService.class);
         mockSkillLoader = mock(SkillLoaderService.class);
         mockAi = mock(AiClientService.class);
         mockAiLog = mock(AiLogService.class);
         mockKubectl = mock(KubectlService.class);
         mapper = new ObjectMapper();
 
-        orchestrator = new DetectionOrchestrator(mockSsh, mockSkillLoader, mockAi, mockAiLog, mockKubectl);
+        orchestrator = new DetectionOrchestrator(mockSsh, mockLocal, mockSkillLoader, mockAi, mockAiLog, mockKubectl);
 
         // Inject @Value fields since this is a non-Spring test
         try {

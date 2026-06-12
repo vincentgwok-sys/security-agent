@@ -63,8 +63,8 @@ public class TaskController {
 
         String connType = request.connectionType() != null ? request.connectionType() : "ssh";
 
-        // Validate SSH credentials for online modes
-        if (!"offline".equals(connType)) {
+        // Validate SSH credentials for online modes (exempt: offline and local)
+        if (!"offline".equals(connType) && !"local".equals(connType)) {
             if (request.targetIp() == null || request.targetIp().isBlank()) {
                 return ResponseEntity.badRequest()
                         .body(Map.of("error", "在线模式下 targetIp 为必填项"));
@@ -103,6 +103,13 @@ public class TaskController {
             task.setTargetNamespace(request.targetNamespace());
             taskService.persistTask(task);
             log.info("任务使用 kubectl 模式: pod={}, namespace={}", request.targetPod(), request.targetNamespace());
+        }
+
+        // Handle local mode: no SSH credentials needed, execute directly on this machine
+        if ("local".equals(connType)) {
+            task.setConnectionType("local");
+            taskService.persistTask(task);
+            log.info("任务使用本地执行模式");
         }
 
         // Handle offline mode: set connection type, generate script + token, return immediately
