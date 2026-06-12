@@ -52,6 +52,10 @@ cp -r rules "$BACKEND_DIR/"
 cat > "$BACKEND_DIR/start.sh" << 'STARTEOF'
 #!/usr/bin/env bash
 # Container Security Agent — 后端启动脚本
+# 如果非 bash 环境（如 sh/dash），自动重新调用 bash 执行
+if [ -z "${BASH_VERSION:-}" ]; then
+    exec bash "$0" "$@"
+fi
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -336,6 +340,9 @@ cp -r frontend/dist/* "$FRONTEND_DIR/"
 cat > "$FRONTEND_DIR/start.sh" << 'STARTEOF'
 #!/usr/bin/env bash
 # Container Security Agent — 前端启动脚本（静态文件服务）
+if [ -z "${BASH_VERSION:-}" ]; then
+    exec bash "$0" "$@"
+fi
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -466,7 +473,10 @@ echo "==> 生成 run.sh 一键启动脚本..."
 cat > "release/run.sh" << 'RUNEOF'
 #!/usr/bin/env bash
 # Container Security Agent — 容器一键启动脚本
-# 用法: ./run.sh [--api-key sk-xxx] [--jdk /path/to/java] [--port 8080]
+# 如果非 bash 环境（如 sh/dash），自动重新调用 bash 执行
+if [ -z "${BASH_VERSION:-}" ]; then
+    exec bash "$0" "$@"
+fi
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/container-security-agent-backend-__VERSION__"
