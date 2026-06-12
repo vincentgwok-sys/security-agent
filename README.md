@@ -107,6 +107,72 @@ npm run dev
 .\stop-dev.ps1
 ```
 
+### 运行 Release 包（推荐，无需构建环境）
+
+项目已提供预构建的 Release 包（`tar.gz`），解压即用，无需安装 Maven、Node.js 等构建工具。
+
+**包位置：**
+
+```
+container-security-agent/release/
+├── container-security-agent-backend-1.0.0.tar.gz   ← 后端服务
+└── container-security-agent-frontend-1.0.0.tar.gz   ← 前端（可选）
+```
+
+#### 后端包
+
+环境要求：**JDK 21+**
+
+```bash
+# 1. 解压
+tar xzf container-security-agent-backend-1.0.0.tar.gz
+cd container-security-agent-backend-1.0.0
+
+# 2. 首次运行（自动生成 application.yml）
+# Windows: 双击 start.bat
+# Linux/Mac:
+./start.sh
+
+# 3. 编辑 application.yml，填入 API Key
+#    也可以设置环境变量：export SECURITY_AGENT_AI_API_KEY="sk-xxx"
+
+# 4. 再次运行启动脚本
+./start.sh
+# → 浏览器打开 http://localhost:8080
+```
+
+**JDK 多版本切换：**
+
+如果系统安装了多个 JDK，启动脚本按以下优先级查找 Java 21+：
+
+| 优先级 | 方式 | 示例 |
+|--------|------|------|
+| 1 | `JAVA_HOME` 环境变量 | `export JAVA_HOME=/usr/lib/jvm/jdk-21` |
+| 2 | `.java_home` 本地文件 | `echo /usr/lib/jvm/jdk-21 > .java_home` |
+| 3 | `PATH` 中的 `java` | 自动兜底 |
+
+#### 前端包（可选）
+
+后端 JAR 已内嵌前端，大多数情况无需单独使用前端包。如需独立部署：
+
+环境要求：**Python 3**
+
+```bash
+tar xzf container-security-agent-frontend-1.0.0.tar.gz
+cd container-security-agent-frontend-1.0.0
+
+# Windows: 双击 start.bat
+# Linux/Mac:
+./start.sh
+# → 浏览器打开 http://localhost:5173
+```
+
+前端通过 `/api/*` 代理或在同域下访问后端（需配置反向代理或 CORS）。
+
+#### 自定义端口
+
+编辑 `application.yml`，修改 `server.port`，或设置环境变量 `SERVER_PORT=9090`。
+
 ### 访问
 
 - 前端界面：`http://localhost:5173`
