@@ -7,7 +7,7 @@
 
     <div v-if="loading" class="loading">加载中...</div>
     <div v-else-if="tasks.length === 0" class="empty-state">
-      <div class="icon">📋</div>
+      <div class="icon">[List]</div>
       <p>暂无检测任务，请创建一个新任务</p>
     </div>
     <div v-else class="card" style="padding: 0; overflow: hidden;">
@@ -48,7 +48,7 @@
                 <button class="btn btn-sm" style="background: #2563eb; color: #fff;"
                   v-if="task.connectionType === 'offline' && (task.status === 'CREATED' || task.status === 'SCRIPT_DOWNLOADED')"
                   @click="showUploadDialog(task.taskId)">
-                  📤 上传结果
+                  上传结果
                 </button>
                 <!-- Offline analyzing -->
                 <span v-else-if="task.status === 'ANALYZING'" class="btn btn-sm btn-secondary" style="cursor: default; opacity: .6;">
@@ -133,9 +133,9 @@ const uploadProgress = ref(0)
 const uploadError = ref('')
 
 function connIcon(type) {
-  if (type === 'kubectl') return '⎈'
-  if (type === 'offline') return '📥'
-  return '🔗'
+  if (type === 'kubectl') return 'k8s'
+  if (type === 'offline') return '[DL]'
+  return '[SSH]'
 }
 
 function connTarget(task) {

@@ -6,7 +6,7 @@
         <small style="color: #6b7280;">{{ totalElements }} 条记录</small>
       </div>
       <div style="display: flex; gap: 8px;">
-        <button class="btn btn-sm btn-secondary" @click="refresh">🔄 刷新</button>
+        <button class="btn btn-sm btn-secondary" @click="refresh">刷新</button>
         <router-link :to="`/report/${taskId}`" class="btn btn-sm btn-primary">查看报告</router-link>
         <router-link to="/tasks" class="btn btn-sm btn-secondary">← 返回</router-link>
       </div>
@@ -14,7 +14,7 @@
 
     <div v-if="loading" class="loading">加载中...</div>
     <div v-else-if="entries.length === 0" class="empty-state">
-      <div class="icon">📜</div>
+      <div class="icon">[Log]</div>
       <p>暂无 AI 交互日志</p>
     </div>
     <div v-else class="log-list">

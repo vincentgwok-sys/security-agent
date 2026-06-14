@@ -15,15 +15,15 @@
 
     <div v-if="loading" class="loading">加载报告...</div>
     <div v-else-if="!report" class="empty-state">
-      <div class="icon">📄</div>
+      <div class="icon">[Report]</div>
       <p>报告未找到或检测尚未完成</p>
       <router-link to="/tasks" class="btn btn-primary" style="margin-top: 12px;">返回任务列表</router-link>
     </div>
     <template v-else>
       <!-- Execution mode label -->
       <div v-if="report.connectionType" class="exec-mode-label" :class="'mode-' + report.connectionType">
-        {{ report.connectionType === 'offline' ? '📥 执行模式：线下回放' :
-           report.connectionType === 'kubectl' ? '⎈ 执行模式：Kubectl 跳板' : '🔗 执行模式：实时检测' }}
+        {{ report.connectionType === 'offline' ? '[DL] 执行模式：线下回放' :
+           report.connectionType === 'kubectl' ? '[K8s] 执行模式：Kubectl 跳板' : '[SSH] 执行模式：实时检测' }}
       </div>
 
       <!-- Score Section -->
@@ -78,7 +78,7 @@
           <div class="skill-card-body">
             <!-- Test Report -->
             <div v-if="sr.testReport" style="margin-bottom: 16px;">
-              <h4 style="font-size: 14px; margin-bottom: 8px;">📋 检测分析</h4>
+              <h4 style="font-size: 14px; margin-bottom: 8px;">[Analyze] 检测分析</h4>
               <p style="font-size: 14px; color: #374151;">{{ sr.testReport.summary }}</p>
               <RiskLevelTag v-if="sr.testReport.riskLevel" :level="sr.testReport.riskLevel" />
               <div v-if="sr.testReport.evidence" style="margin-top: 8px;">
@@ -89,7 +89,7 @@
 
             <!-- Remediation -->
             <div v-if="sr.securityRemediation" class="remediation-block">
-              <h4 style="font-size: 14px; margin-bottom: 8px;">🛡️ 修复建议</h4>
+              <h4 style="font-size: 14px; margin-bottom: 8px;">[Fix] 修复建议</h4>
               <p v-if="sr.securityRemediation.strategy" style="font-size: 13px; margin-bottom: 8px;">
                 <strong>策略：</strong>{{ sr.securityRemediation.strategy }}
               </p>

@@ -2,7 +2,7 @@
   <div id="app-root">
     <nav class="navbar">
       <div class="nav-brand">
-        <router-link to="/" class="brand-link">🔒 容器安全审计 Agent</router-link>
+        <router-link to="/" class="brand-link">[Sec] 容器安全审计 Agent</router-link>
       </div>
       <div class="nav-links">
         <router-link to="/tasks" class="nav-link">任务列表</router-link>

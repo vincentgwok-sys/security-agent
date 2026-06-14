@@ -2,7 +2,7 @@
   <div class="dialog-overlay" @click.self="$emit('close')">
     <div class="dialog">
       <div class="dialog-header">
-        <h3>📤 上传检测结果</h3>
+        <h3>[Upload] 上传检测结果</h3>
         <button class="dialog-close" @click="$emit('close')">&times;</button>
       </div>
       <div class="dialog-body">

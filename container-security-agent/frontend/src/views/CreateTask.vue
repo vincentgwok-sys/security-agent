@@ -10,7 +10,7 @@
           <div class="connection-type-row">
             <label class="conn-type-btn" :class="{ active: form.connectionType === 'ssh' }">
               <input type="radio" value="ssh" v-model="form.connectionType" />
-              🔗 直连 SSH
+              [SSH] 直连 SSH
             </label>
             <label class="conn-type-btn" :class="{ active: form.connectionType === 'kubectl' }">
               <input type="radio" value="kubectl" v-model="form.connectionType" />
@@ -18,11 +18,11 @@
             </label>
             <label class="conn-type-btn" :class="{ active: form.connectionType === 'offline' }">
               <input type="radio" value="offline" v-model="form.connectionType" />
-              📥 线下执行
+              [DL] 线下执行
             </label>
             <label class="conn-type-btn" :class="{ active: form.connectionType === 'local' }">
               <input type="radio" value="local" v-model="form.connectionType" />
-              💻 本地执行
+              [Local] 本地执行
             </label>
           </div>
         </div>
@@ -62,7 +62,7 @@
             <button type="button" class="btn" style="background: #2563eb; color: #fff;"
               :disabled="podLoading || !form.targetIp || !form.sshUser || !form.sshPassword"
               @click="fetchPods">
-              {{ podLoading ? '连接中...' : '🔌 连接跳板机获取 Pod 列表' }}
+              {{ podLoading ? '连接中...' : '[Connect] 连接跳板机获取 Pod 列表' }}
             </button>
           </div>
 
@@ -139,7 +139,7 @@
           ✅ 线下任务已创建！任务 ID：<strong>{{ createdTaskId }}</strong>
         </div>
         <div class="offline-download-card">
-          <h4>📥 下载检测脚本</h4>
+          <h4>[DL] 下载检测脚本</h4>
           <p>请在目标容器中执行此脚本，执行完成后将生成的 ZIP 文件上传回平台。</p>
           <div v-if="downloadToken" class="token-hint">
             <small>下载令牌（仅本次可见，请妥善保管）：<code>{{ downloadToken }}</code></small>
@@ -156,9 +156,12 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { listSkills, createTask, listKubectlPods, downloadScript } from '../api'
 import RiskLevelTag from '../components/RiskLevelTag.vue'
 import StatusBadge from '../components/StatusBadge.vue'
+
+const router = useRouter()
 
 const skills = ref([])
 const skillsLoading = ref(true)
@@ -244,6 +247,10 @@ async function handleSubmit() {
     createdTaskId.value = data.taskId
     if (data.downloadToken) {
       downloadToken.value = data.downloadToken
+    }
+    // 在线模式：自动跳转到任务列表
+    if (form.connectionType !== 'offline') {
+      router.push('/tasks')
     }
   } catch (e) {
     error.value = e.response?.data?.error || e.message || '创建任务失败'

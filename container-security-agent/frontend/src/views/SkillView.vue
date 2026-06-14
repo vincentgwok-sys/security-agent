@@ -2,12 +2,12 @@
   <div>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
       <h2>Skill 管理</h2>
-      <button class="btn btn-sm btn-secondary" @click="reload" :disabled="loading">🔄 重新加载</button>
+      <button class="btn btn-sm btn-secondary" @click="reload" :disabled="loading">重新加载</button>
     </div>
 
     <div v-if="loading" class="loading">加载中...</div>
     <div v-else-if="skills.length === 0" class="empty-state">
-      <div class="icon">🧩</div>
+      <div class="icon">[Skill]</div>
       <p>暂无 Skill，请在 skills/ 目录下添加 Skill JSON 文件</p>
     </div>
     <div v-else class="skill-list">
