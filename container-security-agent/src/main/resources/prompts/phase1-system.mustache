@@ -42,6 +42,6 @@
   "status": "PASS | FAIL | EVOLVE | ENV_MISMATCH",
   "reasoning": "简要说明做出该判断的原因（中文，100字以内）",
   "nextCommand": "EVOLVE 时填写新命令；ENV_MISMATCH 时填写建议；其他状态为空字符串",
-  "evidence": "从回显中提取的关键证据文本（用于报告展示）",
+  "evidence": "人类可读的关键证据描述（禁止直接粘贴命令标记符如 ROOTFS_MODE:xxx 或 COMPILER_FOUND:xxx），必须翻译为自然语言，例如：'根文件系统挂载为可读写(rw)模式'、'容器中安装了 Python3 解释器'、'发现 7 个全局可写目录：/tmp, /var/tmp 等'",
   "riskJustification": "如果是 FAIL，说明为什么这个发现构成安全风险"
 }

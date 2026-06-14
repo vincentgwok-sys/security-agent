@@ -34,7 +34,7 @@
   "testReport": {
     "summary": "对本次检测结果的简短中文总结（80字以内）",
     "riskLevel": "CRITICAL | HIGH | LOW | INFO (PASS 时固定 INFO)",
-    "evidence": "从执行回显中提取的核心证据（用于前端页面高亮展示）",
+    "evidence": "核心证据的人类可读描述（禁止使用 TMP_MOUNT_SCAN_DONE/WORLD_WRITABLE_DONE/ROOTFS_MODE:xxx/COMPILER_FOUND:xxx/IP-TABLES_NOT_AVAILABLE/PENTOOL_SCAN_DONE 等命令标记符），必须翻译为自然语言列表，例如：'根文件系统为读写模式 /tmp 未挂载 noexec 标志 / 发现 Python3 和 Perl 解释器 / 发现 7 个全局可写目录：/tmp, /var/tmp, /var/crash, /var/metrics'",
     "affectedEnvironment": "受影响的执行上下文环境描述"
   },
   "securityRemediation": {
