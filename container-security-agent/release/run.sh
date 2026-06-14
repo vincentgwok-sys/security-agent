@@ -11,15 +11,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/container-security-agent-backend-1.0.0"
 BACKEND_TAR="$SCRIPT_DIR/container-security-agent-backend-1.0.0.tar.gz"
 
-# ── 自动解压 ──
-if [ ! -d "$BACKEND_DIR" ]; then
-    if [ ! -f "$BACKEND_TAR" ]; then
-        echo "[ERROR] 未找到后端包: $BACKEND_TAR"
-        exit 1
-    fi
-    echo "[INFO] 正在解压 $BACKEND_TAR ..."
-    tar xzf "$BACKEND_TAR" -C "$SCRIPT_DIR"
+# ── 重新解压（每次启动都使用最新包） ──
+if [ ! -f "$BACKEND_TAR" ]; then
+    echo "[ERROR] 未找到后端包: $BACKEND_TAR"
+    exit 1
 fi
+echo "[INFO] 清理旧目录..."
+rm -rf "$BACKEND_DIR"
+echo "[INFO] 正在解压 $BACKEND_TAR ..."
+tar xzf "$BACKEND_TAR" -C "$SCRIPT_DIR"
 
 # ── 停止旧进程 ──
 if [ -f "$SCRIPT_DIR/stop.sh" ]; then
