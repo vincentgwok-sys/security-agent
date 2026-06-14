@@ -201,11 +201,11 @@ public class ReportGenerationService {
     }
 
     private void renderSkillCard(StringBuilder html, SkillReport sr) {
-        String statusColor = "PASS".equals(sr.getFinalStatus()) ? "#22c55e" : "#ef4444";
+        String statusColor = "PASS".equals(sr.getFinalStatus()) ? "#22c55e" : "WARN".equals(sr.getFinalStatus()) ? "#f59e0b" : "#ef4444";
         html.append("<div class=\"skill-card\">\n");
         html.append("<div class=\"skill-card-header\" style=\"border-left: 4px solid ").append(statusColor).append(";\">\n");
         html.append("<div>\n");
-        html.append("<span class=\"skill-badge ").append("PASS".equals(sr.getFinalStatus()) ? "pass" : "fail")
+        html.append("<span class=\"skill-badge ").append("PASS".equals(sr.getFinalStatus()) ? "pass" : "WARN".equals(sr.getFinalStatus()) ? "warn" : "fail")
                 .append("\">").append(sr.getFinalStatus()).append("</span>\n");
         html.append("<strong>").append(escapeHtml(sr.getSkillName())).append("</strong>\n");
         html.append("<span class=\"skill-id\">").append(escapeHtml(sr.getSkillId())).append("</span>\n");

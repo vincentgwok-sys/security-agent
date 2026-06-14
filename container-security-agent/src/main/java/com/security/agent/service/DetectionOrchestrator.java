@@ -345,6 +345,7 @@ public class DetectionOrchestrator {
 
                 switch (verdict.getStatus()) {
                     case "PASS":
+                    case "WARN":
                         cmdIndex++;
                         break;
 

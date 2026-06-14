@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class AiVerdict {
 
-    private String status;          // PASS | FAIL | EVOLVE | ENV_MISMATCH
+    private String status;          // PASS | FAIL | WARN | EVOLVE | ENV_MISMATCH
     private String reasoning;
     private String nextCommand;     // EVOLVE 时填写替代命令
     private String evidence;        // 从回显提取的关键证据
