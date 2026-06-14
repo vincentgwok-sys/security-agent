@@ -292,10 +292,12 @@ tar -czf "container-security-agent-frontend-%VERSION%.tar.gz" "container-securit
 rmdir /s /q "%FRONTEND_DIR%"
 echo     前端打包完成
 
-:: ── 6.5 生成 run.sh ──
-echo ==> 生成 run.sh 一键启动脚本...
+:: ── 6.5 生成 run.sh / stop.sh ──
+echo ==> 生成 run.sh / stop.sh 脚本...
 copy "run.sh.template" "release\run.sh" >nul
 powershell -Command "(Get-Content 'release\run.sh') -replace '__VERSION__', '%VERSION%' | Set-Content 'release\run.sh' -NoNewline"
+copy "stop.sh.template" "release\stop.sh" >nul
+powershell -Command "(Get-Content 'release\stop.sh') -replace '__VERSION__', '%VERSION%' | Set-Content 'release\stop.sh' -NoNewline"
 
 :: ── 7. 完成 ──
 echo.

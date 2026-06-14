@@ -472,12 +472,16 @@ rm -rf "container-security-agent-frontend-${VERSION}"
 cd "$SCRIPT_DIR"
 echo "    前端打包完成"
 
-# ── 6.5 复制 run.sh ──
-echo "==> 生成 run.sh 一键启动脚本..."
+# ── 6.5 复制 run.sh / stop.sh ──
+echo "==> 生成 run.sh / stop.sh 脚本..."
 cp "$SCRIPT_DIR/run.sh.template" release/run.sh
 sed -i "s/__VERSION__/${VERSION}/g" release/run.sh
 chmod +x release/run.sh
-echo "    run.sh 生成完成"
+
+cp "$SCRIPT_DIR/stop.sh.template" release/stop.sh
+sed -i "s/__VERSION__/${VERSION}/g" release/stop.sh
+chmod +x release/stop.sh
+echo "    run.sh / stop.sh 生成完成"
 
 # ── 7. 完成 ──
 echo ""

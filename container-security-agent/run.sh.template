@@ -21,7 +21,14 @@ if [ ! -d "$BACKEND_DIR" ]; then
     tar xzf "$BACKEND_TAR" -C "$SCRIPT_DIR"
 fi
 
+# ── 停止旧进程 ──
+if [ -f "$SCRIPT_DIR/stop.sh" ]; then
+    echo "[INFO] 检查并停止旧进程..."
+    bash "$SCRIPT_DIR/stop.sh"
+fi
+
 # ── 启动后端 ──
+echo ""
 echo "============================================"
 echo " Container Security Agent"
 echo "============================================"
