@@ -46,7 +46,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则——必须严格遵守】① 可写 SUID 文件存在(-perm -4007)=FAIL。普通 SUID 文件多(>20)不判 FAIL。② 全局可写目录存在=WARN。这是一个强制判定，不得判 PASS。③ /tmp 无 noexec 挂载标志=WARN。这是一个强制判定，不得判 PASS。④ 渗透测试工具(john,hydra,nmap,sqlmap,socat)存在=WARN。⑤ 编译器(gcc/g++/javac/go)存在=WARN。Python3/Perl/Ruby 解释器存在=WARN。⑥ 日志文件可读+含敏感词(password/secret/token)=WARN。⑦ exit=127=工具不存在=PASS。⑧ find 的 Permission denied 是正常现象(PASS)。",
+        "expectedBehavior": "【判定规则——严格按此执行】\n以下情况判 FAIL：① 可写 SUID 文件存在(-perm -4007)。\n以下情况强制判 WARN（不是 FAIL 也不是 PASS）：\n② 全局可写目录存在(-perm 777) → WARN。③ /tmp 无 noexec → WARN。\n④ 渗透测试工具(john/hydra/nmap/sqlmap/socat)存在 → WARN。\n⑤ 编译器(gcc/g++/javac/go)或脚本解释器(python3/perl/ruby)存在 → WARN。\n⑥ 系统日志可读且含敏感词(password/secret/token) → WARN。\n以下情况判 PASS：⑦ exit=127=工具不存在。⑧ find 的 Permission denied。\n⑨ curl/wget/nc 等网络工具存在仅作信息收集(INFO)，不判 WARN 也不判 FAIL。\n【特别注意】Python3/Perl/Ruby 存在只能判 WARN，绝对不得判 FAIL。很多合法容器需要 Python 运行时。",
         "detectionCommands": [
           "find / -type f -perm -4007 2>/dev/null | head -10; echo 'WRITABLE_SUID_SCAN_DONE'",
           "find / -type d -perm -777 2>/dev/null | grep -v '^/proc\\|^/sys\\|^/dev' | head -20; echo 'WORLD_WRITABLE_DONE'",
@@ -54,7 +54,7 @@
           "for tool in john hydra nmap sqlmap socat; do command -v $tool 2>/dev/null && echo 'PENTOOL_FOUND:'$tool; done; echo 'PENTOOL_SCAN_DONE'",
           "for tool in gcc g++ javac go python3 perl ruby; do command -v $tool 2>/dev/null && echo 'COMPILER_FOUND:'$tool; done; echo 'COMPILER_SCAN_DONE'",
           "for lf in /var/log/auth.log /var/log/secure /var/log/messages /var/log/syslog /var/log/cloud-init.log /var/log/boot.log; do test -r $lf && echo 'LOG_READABLE:'$lf && grep -qiE 'password|secret|token' $lf 2>/dev/null && echo 'LOG_SENSITIVE:'$lf; done; echo 'LOG_SCAN_DONE'",
-          "for tool in curl wget nc python3 python perl ruby php node; do command -v $tool 2>/dev/null && echo 'NET_TOOL_FOUND:'$tool; done; echo 'NET_TOOL_SCAN_DONE'"
+          "for tool in curl wget nc php node; do command -v $tool 2>/dev/null && echo 'NET_TOOL_FOUND:'$tool; done; echo 'NET_TOOL_SCAN_DONE'"
         ]
       },
       "evolvedFrom": null,
@@ -95,7 +95,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "判定规则同 Debian 全部规则。② 全局可写目录存在必须判 WARN。③ /tmp 无 noexec 必须判 WARN。这两个是强制判定，不得忽略。",
+        "expectedBehavior": "判定规则同 Debian 全部规则。② 全局可写目录=WARN。③ /tmp 无 noexec=WARN。⑤ Python3 等解释器存在只能判 WARN，绝不判 FAIL。⑨ 网络工具存在仅作 INFO。",
         "detectionCommands": [
           "find / -type f -perm -4007 2>/dev/null | head -10; echo 'WSUID_DONE'",
           "find / -type d -perm -777 2>/dev/null | grep -v '^/proc\\|^/sys\\|^/dev' | head -20; echo 'WORLD_WRITABLE_DONE'",
@@ -103,7 +103,7 @@
           "for tool in john hydra nmap sqlmap socat; do which $tool 2>/dev/null && echo 'PENTOOL:'$tool; done; echo 'PENTOOL_DONE'",
           "for tool in gcc g++ go python3; do which $tool 2>/dev/null && echo 'COMPILER:'$tool; done; echo 'COMPILER_DONE'",
           "for lf in /var/log/auth.log /var/log/messages /var/log/syslog; do test -r $lf && echo 'LOG_READABLE:'$lf && grep -qiE 'password|secret|token' $lf 2>/dev/null && echo 'LOG_SENSITIVE:'$lf; done; echo 'LOG_DONE'",
-          "for tool in curl wget nc python3 python php; do which $tool 2>/dev/null && echo 'NET_TOOL:'$tool; done; echo 'NET_TOOL_DONE'"
+          "for tool in curl wget nc php; do which $tool 2>/dev/null && echo 'NET_TOOL:'$tool; done; echo 'NET_TOOL_DONE'"
         ]
       },
       "evolvedFrom": "linux-debian-ubuntu-standard",
