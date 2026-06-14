@@ -171,7 +171,7 @@ const createdTaskId = ref('')
 const downloadToken = ref('')
 
 const form = reactive({
-  connectionType: 'ssh',
+  connectionType: 'local',
   targetIp: '',
   sshPort: 22,
   sshUser: 'root',
