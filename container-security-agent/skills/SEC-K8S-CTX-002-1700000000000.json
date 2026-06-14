@@ -13,12 +13,29 @@
       "contextId": "linux-debian-ubuntu-standard",
       "environmentFingerprint": {
         "osType": "linux",
-        "osFlavors": ["debian", "ubuntu"],
+        "osFlavors": [
+          "debian",
+          "ubuntu"
+        ],
         "shellType": "bash",
-        "requiredTools": ["mount", "cat", "df", "find", "grep"],
-        "optionalTools": ["lsblk", "stat", "readlink", "fdisk"],
+        "requiredTools": [
+          "mount",
+          "cat",
+          "df",
+          "find",
+          "grep"
+        ],
+        "optionalTools": [
+          "lsblk",
+          "stat",
+          "readlink",
+          "fdisk"
+        ],
         "minKernelVersion": "3.10.0",
-        "arch": ["amd64", "arm64"]
+        "arch": [
+          "amd64",
+          "arm64"
+        ]
       },
       "envCheckCommands": [
         "uname -s",
@@ -29,14 +46,14 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则】find/df/mount 命令退出码非零但非 127 时需看具体输出，不能仅凭退出码判 FAIL。mount 输出中出现 /var/run/docker.sock、containerd.sock、/host、/rootfs、宿主机 /etc、/proc 或 /sys 的异常挂载 = FAIL。find 找到 docker.sock/containerd.sock = FAIL。/proc/1/cgroup 显示 '/' 或空（而非 /docker/... 或 /kubepods/...）= FAIL。/proc/1/root → 宿主机 '/' = FAIL。df -h 显示非 overlay/tmpfs 的大容量挂载 = 需关注。",
+        "expectedBehavior": "【判定硬规则】① mount输出中发现 docker.sock/containerd.sock=/host=/rootfs 异常挂载=FAIL。② find 找到 docker.sock/containerd.sock=FAIL。③ /proc/1/cgroup 显示 '/' 或空=FAIL。④ df -h 显示的设备容量不代表容器可访问的数据量。K8s 标准 bind-mount（/etc/hosts, /etc/hostname, /etc/resolv.conf, /dev/termination-log）底层可能是大容量宿主机卷，但容器仅可见单个文本文件，必须判 PASS！⑤ exit=127=工具不存在=PASS。⑥ mount/cat/proc 的 Permission denied 是正常现象(PASS)。",
         "detectionCommands": [
           "mount 2>&1 | grep -E 'docker.sock|containerd.sock|/host|/rootfs|/proc|/sys/fs/cgroup' | head -10",
           "cat /proc/1/mounts 2>&1 | grep -E '/proc|/sys|/etc/kubernetes|/var/lib/kubelet|/var/lib/docker' | head -10",
           "ls -la /*.sock /var/run/*.sock /run/*.sock 2>&1 | head -5",
           "find / -name 'docker.sock' -o -name 'containerd.sock' -type s 2>&1 | head -5",
           "cat /proc/self/cgroup 2>&1 | head -5",
-          "df -h 2>&1 | grep -vE '^Filesystem|^tmpfs|^overlay|^/dev/loop' | head -10"
+          "df -h 2>&1 | grep -vE '^Filesystem|^tmpfs|^overlay|^/dev/loop|/etc/hosts|/etc/hostname|/etc/resolv.conf|/dev/termination-log|shm' | head -10; echo 'DF_SCAN_DONE'"
         ]
       },
       "evolvedFrom": null,
@@ -47,12 +64,25 @@
       "contextId": "linux-alpine-busybox",
       "environmentFingerprint": {
         "osType": "linux",
-        "osFlavors": ["alpine"],
+        "osFlavors": [
+          "alpine"
+        ],
         "shellType": "ash",
-        "requiredTools": ["mount", "cat", "df", "find", "grep"],
-        "optionalTools": ["lsblk"],
+        "requiredTools": [
+          "mount",
+          "cat",
+          "df",
+          "find",
+          "grep"
+        ],
+        "optionalTools": [
+          "lsblk"
+        ],
         "minKernelVersion": "3.10.0",
-        "arch": ["amd64", "arm64"]
+        "arch": [
+          "amd64",
+          "arm64"
+        ]
       },
       "envCheckCommands": [
         "uname -s",
@@ -63,7 +93,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "判定规则同 Debian 上下文。Alpine BusyBox 工具输出格式与 GNU 可能不同（如 df 无 --local 等 GNU 扩展选项），适应即可。docker.sock/containerd.sock 存在 = FAIL。/host、/rootfs 挂载 = FAIL。/proc/1/cgroup 异常 = FAIL。",
+        "expectedBehavior": "判定规则同 Debian 全部规则。Alpine BusyBox df/mount 输出格式可能不同。K8s bind-mount (/etc/hosts 等) 即便底层设备大容量也必须判 PASS。",
         "detectionCommands": [
           "mount 2>&1 | head -20",
           "cat /proc/1/mounts 2>&1 | grep -E '/proc|/sys|/etc|/var' | head -10",
@@ -81,12 +111,23 @@
       "contextId": "windows-servercore-default",
       "environmentFingerprint": {
         "osType": "windows",
-        "osFlavors": ["windows-servercore", "windows-nanoserver"],
+        "osFlavors": [
+          "windows-servercore",
+          "windows-nanoserver"
+        ],
         "shellType": "powershell",
-        "requiredTools": ["powershell.exe", "net.exe", "reg.exe"],
-        "optionalTools": ["docker.exe"],
+        "requiredTools": [
+          "powershell.exe",
+          "net.exe",
+          "reg.exe"
+        ],
+        "optionalTools": [
+          "docker.exe"
+        ],
         "minKernelVersion": "10.0.17763",
-        "arch": ["amd64"]
+        "arch": [
+          "amd64"
+        ]
       },
       "envCheckCommands": [
         "ver",

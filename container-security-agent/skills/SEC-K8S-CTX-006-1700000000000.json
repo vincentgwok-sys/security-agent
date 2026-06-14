@@ -13,12 +13,29 @@
       "contextId": "linux-debian-ubuntu-standard",
       "environmentFingerprint": {
         "osType": "linux",
-        "osFlavors": ["debian", "ubuntu"],
+        "osFlavors": [
+          "debian",
+          "ubuntu"
+        ],
         "shellType": "bash",
-        "requiredTools": ["cat", "find", "mount", "grep", "test"],
-        "optionalTools": ["stat", "wc", "head", "command"],
+        "requiredTools": [
+          "cat",
+          "find",
+          "mount",
+          "grep",
+          "test"
+        ],
+        "optionalTools": [
+          "stat",
+          "wc",
+          "head",
+          "command"
+        ],
         "minKernelVersion": "3.10.0",
-        "arch": ["amd64", "arm64"]
+        "arch": [
+          "amd64",
+          "arm64"
+        ]
       },
       "envCheckCommands": [
         "uname -s",
@@ -29,7 +46,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则】① SUID 文件数量多(>20)是常见容器情况，仅当发现 可写 SUID (-perm -4007) 时判 FAIL。② 全局可写目录存在=WARN(非必然FAIL)。③ /tmp 无 noexec=WARN。④ 渗透工具(john,hydra,nmap,sqlmap,socat,metasploit)=WARN(非FAIL)。⑤ 日志文件可读+含敏感词=WARN。⑥ gcc/g++/javac/go 等编译器存在=WARN(利于攻击者编译恶意代码)。⑦ 所有 find 命令的 'Permission denied' 是正常现象(PASS)，不影响判定。exit=127=工具不存在=PASS。",
+        "expectedBehavior": "【判定硬规则——必须严格遵守】① 可写 SUID 文件存在(-perm -4007)=FAIL。普通 SUID 文件多(>20)不判 FAIL。② 全局可写目录存在=WARN。这是一个强制判定，不得判 PASS。③ /tmp 无 noexec 挂载标志=WARN。这是一个强制判定，不得判 PASS。④ 渗透测试工具(john,hydra,nmap,sqlmap,socat)存在=WARN。⑤ 编译器(gcc/g++/javac/go)存在=WARN。Python3/Perl/Ruby 解释器存在=WARN。⑥ 日志文件可读+含敏感词(password/secret/token)=WARN。⑦ exit=127=工具不存在=PASS。⑧ find 的 Permission denied 是正常现象(PASS)。",
         "detectionCommands": [
           "find / -type f -perm -4007 2>/dev/null | head -10; echo 'WRITABLE_SUID_SCAN_DONE'",
           "find / -type d -perm -777 2>/dev/null | grep -v '^/proc\\|^/sys\\|^/dev' | head -20; echo 'WORLD_WRITABLE_DONE'",
@@ -48,12 +65,26 @@
       "contextId": "linux-alpine-busybox",
       "environmentFingerprint": {
         "osType": "linux",
-        "osFlavors": ["alpine"],
+        "osFlavors": [
+          "alpine"
+        ],
         "shellType": "ash",
-        "requiredTools": ["cat", "find", "mount", "grep", "test"],
-        "optionalTools": ["stat", "wc"],
+        "requiredTools": [
+          "cat",
+          "find",
+          "mount",
+          "grep",
+          "test"
+        ],
+        "optionalTools": [
+          "stat",
+          "wc"
+        ],
         "minKernelVersion": "3.10.0",
-        "arch": ["amd64", "arm64"]
+        "arch": [
+          "amd64",
+          "arm64"
+        ]
       },
       "envCheckCommands": [
         "uname -s",
@@ -64,7 +95,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "判定规则同 Debian。Alpine 可能无 command -v（可用 which 替代），EVOLVE 时注意。BusyBox find 选项可能略有不同但核心语法一致。",
+        "expectedBehavior": "判定规则同 Debian 全部规则。② 全局可写目录存在必须判 WARN。③ /tmp 无 noexec 必须判 WARN。这两个是强制判定，不得忽略。",
         "detectionCommands": [
           "find / -type f -perm -4007 2>/dev/null | head -10; echo 'WSUID_DONE'",
           "find / -type d -perm -777 2>/dev/null | grep -v '^/proc\\|^/sys\\|^/dev' | head -20; echo 'WORLD_WRITABLE_DONE'",
@@ -83,12 +114,19 @@
       "contextId": "windows-servercore-default",
       "environmentFingerprint": {
         "osType": "windows",
-        "osFlavors": ["windows-servercore", "windows-nanoserver"],
+        "osFlavors": [
+          "windows-servercore",
+          "windows-nanoserver"
+        ],
         "shellType": "powershell",
-        "requiredTools": ["powershell.exe"],
+        "requiredTools": [
+          "powershell.exe"
+        ],
         "optionalTools": [],
         "minKernelVersion": "10.0.17763",
-        "arch": ["amd64"]
+        "arch": [
+          "amd64"
+        ]
       },
       "envCheckCommands": [
         "ver",

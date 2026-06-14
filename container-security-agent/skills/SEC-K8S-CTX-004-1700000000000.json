@@ -58,9 +58,9 @@
           "iptables -L INPUT 2>&1 | head -10; echo 'IPTABLES_EXIT:'$?",
           "iptables -A INPUT -j DROP 2>&1; echo 'IPTABLES_MODIFY_EXIT:'$?",
           "ip route add 10.255.255.0/24 via 127.0.0.1 2>&1; echo 'ROUTE_ADD_EXIT:'$?",
-          "curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1 | head -5; echo 'AWS_METADATA_EXIT:'$?",
-          "curl --connect-timeout 3 -s http://100.100.100.200/latest/meta-data/ 2>&1 | head -5; echo 'ALI_METADATA_EXIT:'$?",
-          "curl --connect-timeout 3 -sk https://kubernetes.default.svc.cluster.local 2>&1 | head -5; echo 'K8S_API_EXIT:'$?",
+          "O=$(curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1); R=$?; echo \"$O\" | head -5; echo \"AWS_METADATA_EXIT:$R\"",
+          "O=$(curl --connect-timeout 3 -s http://100.100.100.200/latest/meta-data/ 2>&1); R=$?; echo \"$O\" | head -5; echo \"ALI_METADATA_EXIT:$R\"",
+          "O=$(curl --connect-timeout 3 -sk https://kubernetes.default.svc.cluster.local 2>&1); R=$?; echo \"$O\" | head -5; echo \"K8S_API_EXIT:$R\"",
           "ss -tlnp 2>&1 | head -10",
           "env 2>/dev/null | grep -iE 'password|secret|token|api_key|apikey|access_key|credentials|auth|passwd|jwt' | head -10; echo 'ENV_SECRET_EXIT:'$?",
           "env 2>/dev/null | grep -cE 'KUBERNETES_SERVICE|K8S_|KUBE_' | xargs -I{} echo 'K8S_ENV_COUNT:{}'",
@@ -115,8 +115,8 @@
           "iptables -L INPUT 2>&1 | head -10; echo 'IPTABLES_EXIT:'$?",
           "iptables -A INPUT -j DROP 2>&1; echo 'IPTABLES_MODIFY_EXIT:'$?",
           "ip route add 10.255.255.0/24 via 127.0.0.1 2>&1; echo 'ROUTE_ADD_EXIT:'$?",
-          "curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1 | head -3; echo 'AWS_METADATA_EXIT:'$?",
-          "curl --connect-timeout 3 -sk https://kubernetes.default.svc.cluster.local 2>&1 | head -3; echo 'K8S_API_EXIT:'$?",
+          "O=$(curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1); R=$?; echo \"$O\" | head -3; echo \"AWS_METADATA_EXIT:$R\"",
+          "O=$(curl --connect-timeout 3 -sk https://kubernetes.default.svc.cluster.local 2>&1); R=$?; echo \"$O\" | head -3; echo \"K8S_API_EXIT:$R\"",
           "ss -tlnp 2>&1 | head -10",
           "env 2>/dev/null | grep -iE 'password|secret|token|api_key|apikey|access_key|credentials|auth|passwd|jwt' | head -10; echo 'ENV_SECRET_EXIT:'$?"
         ]
