@@ -51,7 +51,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则】① 绝对禁止用 wget 做连通性检测。curl 不可用时直接 PASS。② curl exit=0+有内容=FAIL；exit=6=DNS失败=PASS；exit=7=连接被拒=PASS；exit=28=超时=PASS。③ exit=127=工具不存在=PASS。④ exit=1/2+Operation not permitted=PASS。⑤ 高危(FAIL)：curl 成功读取元数据且输出非空、ip route add 成功执行、环境变量含明文凭据。⑥ env var 检测仅作信息收集(WARN)，不判 FAIL。",
+        "expectedBehavior": "【判定硬规则】① 绝对禁止用 wget 做连通性检测。curl 不可用时直接 PASS。② curl exit=0+有内容=FAIL；exit=6=DNS失败=PASS；exit=7=连接被拒=PASS；exit=28=超时=PASS。③ exit=127=工具不存在=PASS。④ exit=1/2+Operation not permitted=PASS。⑤ 高危(FAIL)：curl 成功读取元数据且输出非空、ip route add 成功执行、环境变量含明文凭据。⑥ env var 检测仅作信息收集(WARN)，不判 FAIL。 EVOLVE: iptables/nft均不存在(127)时直接PASS，不尝试iptables-S/iptables-save等变体。",
         "detectionCommands": [
           "ip route show 2>&1 | head -10",
           "cat /etc/resolv.conf 2>&1",
@@ -108,7 +108,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "同 Debian 全部规则。env 在 Alpine 中可能为 BusyBox 实现，输出格式相同。xargs -I{} 可能在极简 Alpine 中不可用，EVOLVE 时用 sed 替代。",
+        "expectedBehavior": "同 Debian 全部规则。env 在 Alpine 中可能为 BusyBox 实现，输出格式相同。xargs -I{} 可能在极简 Alpine 中不可用，EVOLVE 时用 sed 替代。 EVOLVE: iptables不存在直接PASS，不尝试其他变体。",
         "detectionCommands": [
           "cat /etc/resolv.conf 2>&1",
           "ip route show 2>&1 | head -10",
