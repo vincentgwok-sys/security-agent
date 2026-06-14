@@ -46,7 +46,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【防循环】本 Skill 所有命令均为标准文件检查(find/mount/test/grep/which)，在任何 Linux 发行版上均可正常执行。绝不触发 ENV_MISMATCH。若工具不存在(exit=127)直接 PASS 并跳到下一命令，不 EVOLVE。【判定规则——严格按此执行】\n以下情况判 FAIL：① 可写 SUID 文件存在(-perm -4007)。\n以下情况强制判 WARN（不是 FAIL 也不是 PASS）：\n② 全局可写目录存在(-perm 777) → WARN。③ /tmp 无 noexec → WARN。\n④ 渗透测试工具(john/hydra/nmap/sqlmap/socat)存在 → WARN。\n⑤ 编译器(gcc/g++/javac/go)或脚本解释器(python3/perl/ruby)存在 → WARN。\n⑥ 系统日志可读且含敏感词(password/secret/token) → WARN。\n以下情况判 PASS：⑦ exit=127=工具不存在。⑧ find 的 Permission denied。\n⑨ curl/wget/nc 等网络工具存在仅作信息收集(INFO)，不判 WARN 也不判 FAIL。\n【特别注意】Python3/Perl/Ruby 存在只能判 WARN，绝对不得判 FAIL。很多合法容器需要 Python 运行时。 同一检测命令只执行一次，不重复。 CCE 6.1: Remove ALL SETUID/SETGID binaries. Presence=WARN.  CCE 5.3: readOnlyRootFilesystem=true=PASS, false/rw=WARN.  CCE 6.1: Minimize images; remove nc/curl/dangerous network tools. ",
+        "expectedBehavior": "【防循环】本 Skill 所有命令均为标准文件检查(find/mount/test/grep/which)，在任何 Linux 发行版上均可正常执行。绝不触发 ENV_MISMATCH。若工具不存在(exit=127)直接 PASS 并跳到下一命令，不 EVOLVE。【判定规则——严格按此执行】\n以下情况判 FAIL：① 可写 SUID 文件存在(-perm -4007)。\n以下情况强制判 WARN（不是 FAIL 也不是 PASS）：\n② 全局可写目录存在(-perm 777) → WARN。③ /tmp 无 noexec → WARN。\n④ 渗透测试工具(john/hydra/nmap/sqlmap/socat)存在 → WARN。\n⑤ 编译器(gcc/g++/javac/go)或脚本解释器(python3/perl/ruby)存在 → WARN。\n⑥ 系统日志可读且含敏感词(password/secret/token) → WARN。\n以下情况判 PASS：⑦ exit=127=工具不存在。⑧ find 的 Permission denied。\n⑨ curl/wget/nc 等网络工具存在仅作信息收集(INFO)，不判 WARN 也不判 FAIL。\n【特别注意】Python3/Perl/Ruby 存在只能判 WARN，绝对不得判 FAIL。很多合法容器需要 Python 运行时。 同一检测命令只执行一次，不重复。 CCE 6.1: Remove ALL SETUID/SETGID binaries. Presence=WARN.  CCE 5.3: readOnlyRootFilesystem=true=PASS, false/rw=WARN.  CCE 6.1: Minimize images; remove nc/curl/dangerous network tools. SETUID_BINS判定: /usr/bin/su、/usr/bin/sudo、/usr/bin/passwd、/usr/bin/newgrp、/usr/bin/chsh、/usr/bin/chfn 等是标准 Linux 系统 SUID 二进制，在几乎所有容器镜像中存在，它们的存在不构成安全风险(INFO)。仅非标准/自定义 SUID 程序才判 WARN。若SETUID列表仅有系统标准SUID则=PASS。",
         "detectionCommands": [
           "find / -type f -perm -4007 2>/dev/null | head -10; echo 'WRITABLE_SUID_SCAN_DONE'",
           "find / -xdev -perm /6000 -type f 2>/dev/null | head -30; echo 'SETUID_BINS_DONE'",
@@ -97,7 +97,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【防循环】本 Skill 所有命令均为标准文件检查(find/mount/test/grep/which)，在任何 Linux 发行版上均可正常执行。绝不触发 ENV_MISMATCH。若工具不存在(exit=127)直接 PASS 并跳到下一命令，不 EVOLVE。判定规则同 Debian 全部规则。② 全局可写目录=WARN。③ /tmp 无 noexec=WARN。⑤ Python3 等解释器存在只能判 WARN，绝不判 FAIL。⑨ 网络工具存在仅作 INFO。 同一命令只执行一次。 CCE: SETUID/SETGID=WARN, readOnlyRootFS:ro=PASS/rw=WARN.",
+        "expectedBehavior": "【防循环】本 Skill 所有命令均为标准文件检查(find/mount/test/grep/which)，在任何 Linux 发行版上均可正常执行。绝不触发 ENV_MISMATCH。若工具不存在(exit=127)直接 PASS 并跳到下一命令，不 EVOLVE。判定规则同 Debian 全部规则。② 全局可写目录=WARN。③ /tmp 无 noexec=WARN。⑤ Python3 等解释器存在只能判 WARN，绝不判 FAIL。⑨ 网络工具存在仅作 INFO。 同一命令只执行一次。 CCE: SETUID/SETGID=WARN, readOnlyRootFS:ro=PASS/rw=WARN.SETUID_BINS判定: /usr/bin/su、/usr/bin/sudo、/usr/bin/passwd、/usr/bin/newgrp、/usr/bin/chsh、/usr/bin/chfn 等是标准 Linux 系统 SUID 二进制，在几乎所有容器镜像中存在，它们的存在不构成安全风险(INFO)。仅非标准/自定义 SUID 程序才判 WARN。若SETUID列表仅有系统标准SUID则=PASS。",
         "detectionCommands": [
           "find / -type f -perm -4007 2>/dev/null | head -10; echo 'WSUID_DONE'",
           "find / -xdev -perm /6000 -type f 2>/dev/null | head -20; echo 'SETUID_BINS_DONE'",
