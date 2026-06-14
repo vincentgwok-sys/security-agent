@@ -93,7 +93,14 @@
       <button :disabled="page >= totalPages - 1" @click="page++">下一页</button>
     </div>
 
-    <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
+    <div style="display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 12px;">
+      <span v-if="autoRefresh && hasActiveTasks" style="font-size: 12px; color: #16a34a;">
+        Auto 刷新中 ({{ REFRESH_INTERVAL / 1000 }}s)
+      </span>
+      <button class="btn btn-sm" :style="{ background: autoRefresh ? '#16a34a' : '#6b7280', color: '#fff' }"
+        @click="toggleAutoRefresh">
+        {{ autoRefresh ? 'Auto: ON' : 'Auto: OFF' }}
+      </button>
       <button class="btn btn-sm btn-secondary" @click="refresh" :disabled="loading">刷新</button>
     </div>
 
@@ -111,7 +118,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { listTasks, getTask, createTask, cancelTask as apiCancelTask,
          deleteTask as apiDeleteTask, uploadResults } from '../api'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -124,6 +131,13 @@ const totalPages = ref(0)
 const retrying = ref(null)
 const cancelling = ref(null)
 const deleting = ref(null)
+const autoRefresh = ref(true)
+let refreshTimer = null
+const REFRESH_INTERVAL = 5000 // 5 秒轮询
+
+const hasActiveTasks = computed(() =>
+  tasks.value.some(t => t.status === 'RUNNING' || t.status === 'CREATED' || t.status === 'ANALYZING')
+)
 
 // Upload dialog state
 const uploadTaskId = ref(null)
@@ -184,6 +198,38 @@ function refresh() {
   page.value = 0
   fetchTasks()
 }
+
+function toggleAutoRefresh() {
+  autoRefresh.value = !autoRefresh.value
+  if (autoRefresh.value) {
+    startAutoRefresh()
+  } else {
+    stopAutoRefresh()
+  }
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh()
+  refreshTimer = setInterval(() => {
+    if (hasActiveTasks.value) {
+      fetchTasks()
+    }
+  }, REFRESH_INTERVAL)
+}
+
+function stopAutoRefresh() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+onMounted(() => {
+  fetchTasks()
+  startAutoRefresh()
+})
+
+onUnmounted(stopAutoRefresh)
 
 async function retryTask(task) {
   if (!confirm(`确定要重试任务 ${task.taskId} 吗？将使用最新的 Skill 和规则重新检测。`)) return
@@ -248,5 +294,4 @@ function formatTime(dateStr) {
   }
 }
 
-onMounted(fetchTasks)
 </script>
