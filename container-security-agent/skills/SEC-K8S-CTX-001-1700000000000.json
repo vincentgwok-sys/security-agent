@@ -3,10 +3,10 @@
   "skillName": "权限与隔离突破",
   "versionTimestamp": 1700000000000,
   "riskLevel": "CRITICAL",
-  "description": "检测容器是否以 --privileged 模式运行，或者在其 securityContext 中被赋予了 CAP_SYS_ADMIN、CAP_SYS_PTRACE 等高危权限，从而评估其逃逸风险。",
+  "description": "检测容器是否以 --privileged 模式运行，高危 Capability 是否存在，以及 cgroup/core_pattern/uevent_helper 等已知逃逸向量是否暴露。",
   "evolutionCount": 0,
   "reportMetadata": {
-    "remediationFocus": "重点针对 Kubernetes Pod/Container 的 securityContext 进行加固，指导开发人员 drop ALL capabilities 并禁用特权模式。"
+    "remediationFocus": "重点针对 Kubernetes Pod/Container 的 securityContext 进行加固，drop ALL capabilities、禁用特权模式、限制宿主机内核接口写入。"
   },
   "executionContexts": [
     {
@@ -15,28 +15,33 @@
         "osType": "linux",
         "osFlavors": ["debian", "ubuntu"],
         "shellType": "bash",
-        "requiredTools": ["capsh", "cat", "mount", "grep"],
-        "optionalTools": ["getfattr", "attr", "unshare", "nsenter"],
+        "requiredTools": ["capsh", "cat", "mount", "grep", "test"],
+        "optionalTools": ["getfattr", "attr", "nsenter", "unshare"],
         "minKernelVersion": "3.10.0",
         "arch": ["amd64", "arm64"]
       },
       "envCheckCommands": [
         "uname -s",
         "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
-        "which capsh cat mount grep getfattr nsenter unshare 2>/dev/null",
+        "which capsh cat mount grep test nsenter unshare getfattr 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m",
         "id 2>&1"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则】命令退出码 127 = 工具不存在 = PASS（不是漏洞）。mount 失败但 stderr 含 'Operation not permitted'/'Permission denied' = PASS。mount 成功（exit=0 且目录创建）= FAIL。CapEff=ffffffff 或含 CAP_SYS_ADMIN(bit 21)/CAP_SYS_PTRACE(bit 19) = FAIL。Seccomp=2(strict)或=1(filter)=PASS，Seccomp=0(disabled)=FAIL。NoNewPrivs=1=PASS，NoNewPrivs=0=FAIL。uid=0(gid=0) 且无 user namespace 隔离 = 需关注（非必然 FAIL，但提高风险权重）。",
+        "expectedBehavior": "【判定硬规则】① exit=127=工具不存在=PASS(非漏洞)。② mount 失败+stderr含'Operation not permitted'/'Permission denied'/'必须以超级用户身份使用 mount'=PASS。③ mount 成功(exit=0)=FAIL。④ CapEff=ffffffff或含CAP_SYS_ADMIN(bit21)/CAP_SYS_PTRACE(bit19)=FAIL。⑤ Seccomp=2或1=PASS, Seccomp=0=FAIL。⑥ NoNewPrivs=1=PASS。⑦ cgroup/core_pattern/uevent_helper/module任一可写=FAIL(逃逸向量)。⑧ 发现块设备(/dev/sda等)=WARN(非必然FAIL)。⑨ uid=0+无user namespace=需关注。⑩ capsh --print中Current IAB含!cap_sys_admin等=PASS。",
         "detectionCommands": [
           "capsh --print 2>&1",
           "cat /proc/1/status 2>&1 | grep -E 'CapEff|Seccomp|NoNewPrivs'",
-          "mount -t tmpfs none /tmp/test_mount_csagent 2>&1; rmdir /tmp/test_mount_csagent 2>/dev/null; echo 'MOUNT_EXIT:'$?",
           "cat /proc/self/status 2>&1 | grep -E '^Uid:|^Gid:|CapEff|CapPrm|NoNewPrivs'",
-          "cat /proc/sys/kernel/unprivileged_userns_clone 2>&1"
+          "mount -t tmpfs none /tmp/test_mount_csagent 2>&1; rmdir /tmp/test_mount_csagent 2>/dev/null; echo 'MOUNT_EXIT:'$?",
+          "test -w /proc/sys/kernel/core_pattern && echo 'CORE_PATTERN_WRITABLE' || echo 'CORE_PATTERN_READONLY' 2>&1",
+          "test -d /sys/fs/cgroup && test -w /sys/fs/cgroup && echo 'CGROUP_WRITABLE' || echo 'CGROUP_READONLY' 2>&1",
+          "test -w /sys/kernel/uevent_helper && echo 'UEVENT_HELPER_WRITABLE' || echo 'UEVENT_HELPER_SAFE' 2>&1",
+          "test -d /sys/module && test -w /sys/module && echo 'MODULE_WRITABLE' || echo 'MODULE_SAFE' 2>&1",
+          "for dev in /dev/sda /dev/sdb /dev/vda /dev/vdb /dev/mem /dev/kmem /dev/port; do test -b $dev -o -c $dev && echo 'DEV_EXPOSED:'$dev; done 2>&1",
+          "cat /proc/sys/kernel/unprivileged_userns_clone 2>&1; cat /proc/sys/user/max_user_namespaces 2>&1; echo 'USRNS_INFO_ONLY'"
         ]
       },
       "evolvedFrom": null,
@@ -49,7 +54,7 @@
         "osType": "linux",
         "osFlavors": ["alpine"],
         "shellType": "ash",
-        "requiredTools": ["cat", "grep", "mount"],
+        "requiredTools": ["cat", "grep", "mount", "test"],
         "optionalTools": ["capsh"],
         "minKernelVersion": "3.10.0",
         "arch": ["amd64", "arm64"]
@@ -57,19 +62,22 @@
       "envCheckCommands": [
         "uname -s",
         "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
-        "which cat grep mount capsh 2>/dev/null",
+        "which cat grep mount test capsh 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m",
         "id 2>&1"
       ],
       "executionLogic": {
-        "expectedBehavior": "判定规则同 Debian 上下文。Alpine 可能无 capsh（exit=127=PASS），此时仅从 /proc 判定。BusyBox mount 行为可能不同，但 exit=0 且目录创建仍为 FAIL。CapEff=ffffffff = FAIL。",
+        "expectedBehavior": "判定规则同 Debian 上下文全部。Alpine BusyBox mount/test行为可能不同但逻辑一致。cgroup/core_pattern可写=FAIL。",
         "detectionCommands": [
           "cat /proc/1/status 2>&1 | grep -E 'CapEff|Seccomp|NoNewPrivs'",
+          "cat /proc/self/status 2>&1 | grep -E '^Uid:|CapEff|NoNewPrivs'",
           "mount -t tmpfs none /tmp/test_mount_csagent 2>&1; rmdir /tmp/test_mount_csagent 2>/dev/null; echo 'MOUNT_EXIT:'$?",
-          "cat /proc/self/mounts 2>&1 | grep -E '/proc|/sys' | head -5",
-          "cat /proc/self/status 2>&1 | grep -E '^Uid:|CapEff|NoNewPrivs'"
+          "test -w /proc/sys/kernel/core_pattern && echo 'CORE_PATTERN_WRITABLE' || echo 'CORE_PATTERN_READONLY' 2>&1",
+          "test -d /sys/fs/cgroup && test -w /sys/fs/cgroup && echo 'CGROUP_WRITABLE' || echo 'CGROUP_READONLY' 2>&1",
+          "test -w /sys/kernel/uevent_helper && echo 'UEVENT_HELPER_WRITABLE' || echo 'UEVENT_HELPER_SAFE' 2>&1",
+          "for dev in /dev/sda /dev/sdb /dev/vda /dev/vdb /dev/mem /dev/kmem; do test -b $dev -o -c $dev && echo 'DEV_EXPOSED:'$dev; done 2>&1"
         ]
       },
       "evolvedFrom": "linux-debian-ubuntu-standard",
@@ -95,7 +103,7 @@
         "powershell.exe -Command \"[Environment]::Is64BitOperatingSystem\""
       ],
       "executionLogic": {
-        "expectedBehavior": "Windows 容器应运行在进程隔离模式下（非 Hyper-V），安全配置应从注册表和进程令牌验证。容器内用户不应具有 SeDebugPrivilege 或 SeTakeOwnershipPrivilege 等特权。",
+        "expectedBehavior": "Windows 容器通过 HCS 隔离。安全容器中 whoami /priv 不应含 SeDebugPrivilege/SeTakeOwnershipPrivilege 等特权。",
         "detectionCommands": [
           "whoami /all 2>&1",
           "powershell.exe -Command \"Get-Process -IncludeUserName | Select-Object -First 10 | Format-List\"",

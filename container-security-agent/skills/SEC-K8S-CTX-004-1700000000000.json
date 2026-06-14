@@ -1,45 +1,69 @@
 {
   "skillId": "SEC-K8S-CTX-004",
-  "skillName": "网络隔离与横向移动",
+  "skillName": "网络隔离与信息泄露",
   "versionTimestamp": 1700000000000,
   "riskLevel": "HIGH",
-  "description": "检测容器是否具备修改网络配置（iptables、路由表）的权限，以及能否访问云元数据服务（169.254.169.254）、Kubernetes API Server、集群内其他 Service 等，评估其横向移动风险。【判定规则】wget 退出码不可靠禁止用于连通性判定；curl exit=0+有输出=危险/exit=6,7,28=安全；exit=127=工具缺失=安全(PASS)；exit=1,2需看stderr区分权限拒绝还是语法错误。",
+  "description": "检测容器网络隔离有效性（iptables/路由修改权限、云元数据可达性、K8s API访问），以及环境变量中的敏感信息泄露和K8s环境探测能力。【判定规则】wget禁止用于连通性判定；curl exit=0+有输出=危险/exit=6,7,28=安全；exit=127=工具缺失=安全(PASS)。",
   "evolutionCount": 0,
   "reportMetadata": {
-    "remediationFocus": "指导用户配置 Kubernetes NetworkPolicy 实现微隔离，结合 CNI 插件（如 Calico、Cilium）限制 Pod 间通信；必要时启用 Pod Security Standards 限制容器网络能力。"
+    "remediationFocus": "配置 Kubernetes NetworkPolicy 微隔离，阻止对 169.254.169.254/100.100.100.200 的出站流量；使用 K8s Secrets 替代环境变量存储敏感信息；启用 Pod Security Standards。"
   },
   "executionContexts": [
     {
       "contextId": "linux-debian-ubuntu-standard",
       "environmentFingerprint": {
         "osType": "linux",
-        "osFlavors": ["debian", "ubuntu"],
+        "osFlavors": [
+          "debian",
+          "ubuntu"
+        ],
         "shellType": "bash",
-        "requiredTools": ["cat", "grep", "ip", "curl"],
-        "optionalTools": ["iptables", "nft", "wget", "ss", "host", "dig", "getent", "nslookup", "nmap", "tcpdump", "netcat"],
+        "requiredTools": [
+          "cat",
+          "grep",
+          "ip",
+          "curl",
+          "test"
+        ],
+        "optionalTools": [
+          "iptables",
+          "ss",
+          "host",
+          "dig",
+          "getent",
+          "nslookup",
+          "nmap",
+          "tcpdump",
+          "netcat"
+        ],
         "minKernelVersion": "3.10.0",
-        "arch": ["amd64", "arm64"]
+        "arch": [
+          "amd64",
+          "arm64"
+        ]
       },
       "envCheckCommands": [
         "uname -s",
         "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
-        "which cat grep ip curl wget ss iptables nft host getent 2>/dev/null",
+        "which cat grep ip curl test ss iptables host getent nslookup 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则——必须遵守】① 绝对禁止用 wget 做任何连通性检测。wget -qO- 在连接失败时仍可能返回退出码 0（已知缺陷，已造成多次误报）。EVOLVE 时绝对不得将 curl 替换为 wget，若 curl 不可用则直接标记 PASS（工具缺失，非安全缺陷）。② curl 退出码含义：exit=0+有内容=危险（元数据可读）；exit=6=DNS失败(PASS)；exit=7=连接被拒(PASS)；exit=28=超时(PASS)；exit=127=curl不存在(PASS)。③ exit=127=工具不存在=PASS；exit=1或2+i操作被拒绝(Operation not permitted)=PASS。④ 高危信号（FAIL）：curl 成功读取元数据且输出非空；ip route add 成功执行。ss -tlnp 仅作信息收集不做判定。",
-
+        "expectedBehavior": "【判定硬规则】① 绝对禁止用 wget 做连通性检测。curl 不可用时直接 PASS。② curl exit=0+有内容=FAIL；exit=6=DNS失败=PASS；exit=7=连接被拒=PASS；exit=28=超时=PASS。③ exit=127=工具不存在=PASS。④ exit=1/2+Operation not permitted=PASS。⑤ 高危(FAIL)：curl 成功读取元数据且输出非空、ip route add 成功执行、环境变量含明文凭据。⑥ env var 检测仅作信息收集(WARN)，不判 FAIL。",
         "detectionCommands": [
           "ip route show 2>&1 | head -10",
           "cat /etc/resolv.conf 2>&1",
           "iptables -L INPUT 2>&1 | head -10; echo 'IPTABLES_EXIT:'$?",
           "iptables -A INPUT -j DROP 2>&1; echo 'IPTABLES_MODIFY_EXIT:'$?",
+          "ip route add 10.255.255.0/24 via 127.0.0.1 2>&1; echo 'ROUTE_ADD_EXIT:'$?",
+          "curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1 | head -5; echo 'AWS_METADATA_EXIT:'$?",
+          "curl --connect-timeout 3 -s http://100.100.100.200/latest/meta-data/ 2>&1 | head -5; echo 'ALI_METADATA_EXIT:'$?",
           "curl --connect-timeout 3 -sk https://kubernetes.default.svc.cluster.local 2>&1 | head -5; echo 'K8S_API_EXIT:'$?",
-          "curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1 | head -5; echo 'METADATA_EXIT:'$?",
           "ss -tlnp 2>&1 | head -10",
-          "ip neigh show 2>&1 | head -10",
+          "env 2>/dev/null | grep -iE 'password|secret|token|api_key|apikey|access_key|credentials|auth|passwd|jwt' | head -10; echo 'ENV_SECRET_EXIT:'$?",
+          "env 2>/dev/null | grep -cE 'KUBERNETES_SERVICE|K8S_|KUBE_' | xargs -I{} echo 'K8S_ENV_COUNT:{}'",
           "getent hosts google.com 2>&1; echo 'DNS_EXIT:'$?"
         ]
       },
@@ -51,31 +75,50 @@
       "contextId": "linux-alpine-busybox",
       "environmentFingerprint": {
         "osType": "linux",
-        "osFlavors": ["alpine"],
+        "osFlavors": [
+          "alpine"
+        ],
         "shellType": "ash",
-        "requiredTools": ["cat", "grep", "ip"],
-        "optionalTools": ["iptables", "ss", "host", "nslookup", "netstat"],
+        "requiredTools": [
+          "cat",
+          "grep",
+          "ip",
+          "test"
+        ],
+        "optionalTools": [
+          "curl",
+          "iptables",
+          "ss",
+          "host",
+          "nslookup",
+          "netstat"
+        ],
         "minKernelVersion": "3.10.0",
-        "arch": ["amd64", "arm64"]
+        "arch": [
+          "amd64",
+          "arm64"
+        ]
       },
       "envCheckCommands": [
         "uname -s",
         "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
-        "which cat grep ip curl ss iptables host nslookup netstat 2>/dev/null",
+        "which cat grep ip curl test ss iptables host nslookup netstat 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则——必须遵守】同 Debian 上下文全部规则。额外强调：Alpine 的 BusyBox wget -q 退出码完全不可靠（连接失败也返回 0），本 Skill 禁用 wget。EVOLVE 时若 curl 不可用也应直接 PASS，绝不能退化为 wget。",
+        "expectedBehavior": "同 Debian 全部规则。env 在 Alpine 中可能为 BusyBox 实现，输出格式相同。xargs -I{} 可能在极简 Alpine 中不可用，EVOLVE 时用 sed 替代。",
         "detectionCommands": [
           "cat /etc/resolv.conf 2>&1",
           "ip route show 2>&1 | head -10",
           "iptables -L INPUT 2>&1 | head -10; echo 'IPTABLES_EXIT:'$?",
           "iptables -A INPUT -j DROP 2>&1; echo 'IPTABLES_MODIFY_EXIT:'$?",
-          "curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1 | head -3; echo 'METADATA_EXIT:'$?",
+          "ip route add 10.255.255.0/24 via 127.0.0.1 2>&1; echo 'ROUTE_ADD_EXIT:'$?",
+          "curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1 | head -3; echo 'AWS_METADATA_EXIT:'$?",
           "curl --connect-timeout 3 -sk https://kubernetes.default.svc.cluster.local 2>&1 | head -3; echo 'K8S_API_EXIT:'$?",
-          "ss -tlnp 2>&1 | head -10"
+          "ss -tlnp 2>&1 | head -10",
+          "env 2>/dev/null | grep -iE 'password|secret|token|api_key|apikey|access_key|credentials|auth|passwd|jwt' | head -10; echo 'ENV_SECRET_EXIT:'$?"
         ]
       },
       "evolvedFrom": "linux-debian-ubuntu-standard",
@@ -86,12 +129,24 @@
       "contextId": "windows-servercore-default",
       "environmentFingerprint": {
         "osType": "windows",
-        "osFlavors": ["windows-servercore", "windows-nanoserver"],
+        "osFlavors": [
+          "windows-servercore",
+          "windows-nanoserver"
+        ],
         "shellType": "powershell",
-        "requiredTools": ["powershell.exe", "netsh.exe", "ipconfig.exe"],
-        "optionalTools": ["curl.exe", "nslookup.exe"],
+        "requiredTools": [
+          "powershell.exe",
+          "netsh.exe",
+          "ipconfig.exe"
+        ],
+        "optionalTools": [
+          "curl.exe",
+          "nslookup.exe"
+        ],
         "minKernelVersion": "10.0.17763",
-        "arch": ["amd64"]
+        "arch": [
+          "amd64"
+        ]
       },
       "envCheckCommands": [
         "ver",
@@ -100,7 +155,7 @@
         "where powershell.exe netsh.exe ipconfig.exe curl.exe 2>nul"
       ],
       "executionLogic": {
-        "expectedBehavior": "Windows 容器通过 Windows Filtering Platform (WFP) 和虚拟交换机实现网络隔离。安全容器中：netsh firewall 修改返回 'Access denied'；元数据端点 169.254.169.254 不可达（Invoke-WebRequest 抛异常）。不安全容器中：防火墙规则可修改、元数据可访问。",
+        "expectedBehavior": "Windows 容器通过 WFP/虚拟交换机隔离。安全容器中 netsh firewall add 被拒、Invoke-WebRequest 元数据端点异常(BLOCKED)。",
         "detectionCommands": [
           "netsh advfirewall show currentprofile 2>&1",
           "netsh advfirewall firewall add rule name=\"SecTest\" dir=in action=block protocol=TCP localport=12345 2>&1",
@@ -108,6 +163,7 @@
           "ipconfig /all 2>&1",
           "powershell.exe -Command \"Test-NetConnection -ComputerName kubernetes.default.svc.cluster.local -Port 443 -WarningAction SilentlyContinue\" 2>&1",
           "powershell.exe -Command \"try { $r=Invoke-WebRequest -Uri http://169.254.169.254/latest/meta-data/ -TimeoutSec 3 -UseBasicParsing; Write-Host 'METADATA_REACHABLE'; $r.Content | Select-Object -First 3 } catch { Write-Host 'BLOCKED:' $_.Exception.Message }\" 2>&1",
+          "powershell.exe -Command \"Get-ChildItem env: | Where-Object { $_.Name -match 'password|secret|token|key|credential|auth' } | Format-Table Name\" 2>&1",
           "powershell.exe -Command \"Resolve-DnsName kubernetes.default.svc.cluster.local -ErrorAction SilentlyContinue\" 2>&1"
         ]
       },

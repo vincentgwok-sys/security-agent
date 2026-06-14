@@ -1,0 +1,162 @@
+{
+  "skillId": "SEC-K8S-CTX-005",
+  "skillName": "凭证与密钥发现",
+  "versionTimestamp": 1700000000000,
+  "riskLevel": "CRITICAL",
+  "description": "检测容器中是否存在 SSH 密钥、云服务商凭证（AWS/GCP）、K8s ServiceAccount Token、通用密钥/证书文件、Git 仓库中的硬编码凭据、bash 历史中的敏感命令，以及 /etc/shadow、/etc/passwd 等系统权限文件的异常权限。",
+  "evolutionCount": 0,
+  "reportMetadata": {
+    "remediationFocus": "不要在容器镜像或环境变量中硬编码凭据；使用 K8s Secrets 或外部密钥管理服务（如 AWS Secrets Manager、HashiCorp Vault）；使用 .dockerignore 避免将密钥文件打包进镜像；对 K8s ServiceAccount 配置 RBAC 最小权限。"
+  },
+  "executionContexts": [
+    {
+      "contextId": "linux-debian-ubuntu-standard",
+      "environmentFingerprint": {
+        "osType": "linux",
+        "osFlavors": [
+          "debian",
+          "ubuntu"
+        ],
+        "shellType": "bash",
+        "requiredTools": [
+          "cat",
+          "find",
+          "grep",
+          "test"
+        ],
+        "optionalTools": [
+          "stat",
+          "sudo",
+          "groups",
+          "wc",
+          "head"
+        ],
+        "minKernelVersion": "3.10.0",
+        "arch": [
+          "amd64",
+          "arm64"
+        ]
+      },
+      "envCheckCommands": [
+        "uname -s",
+        "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
+        "which cat find grep test stat sudo groups wc head 2>/dev/null",
+        "echo $SHELL",
+        "uname -r",
+        "uname -m",
+        "id 2>&1",
+        "whoami 2>&1"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "【判定硬规则】① 发现SSH私钥文件(id_rsa,id_ecdsa等)=FAIL。② AWS/GCP凭证文件存在=FAIL。③ K8s SA Token存在=FAIL。④ /etc/shadow可读=FAIL。⑤ /etc/passwd可写=FAIL。⑥ sudo -n -l返回NOPASSWD=WARN。⑦ 用户在docker/root组=WARN。⑧ .git/config含password/token=FAIL。⑨ bash_history含密码或ssh命令=WARN。⑩ 通用密钥文件>5个=WARN，少量系统证书=PASS。exit=127=工具不存在=PASS。find的Permission denied是正常现象(PASS)。",
+        "detectionCommands": [
+          "for d in /root /home/*; do test -d $d/.ssh && find $d/.ssh -type f -name 'id_rsa' -o -name 'id_ecdsa' -o -name 'id_ed25519' -o -name '*.pem' 2>/dev/null | while read f; do echo 'SSH_KEY_FOUND:'$f; done; done; echo 'SSH_SCAN_DONE'",
+          "for d in /root /home/*; do test -f $d/.aws/credentials && echo 'AWS_CRED_FOUND:'$d/.aws/credentials; done 2>/dev/null; echo 'AWS_SCAN_DONE'",
+          "find / -path '*/gcloud/*' -name '*.json' 2>/dev/null | head -5 | while read f; do echo 'GCP_KEY_FOUND:'$f; done; echo 'GCP_SCAN_DONE'",
+          "test -f /var/run/secrets/kubernetes.io/serviceaccount/token && echo 'K8S_SA_TOKEN_FOUND' && cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null || echo 'K8S_SA_TOKEN_NONE'",
+          "test -r /etc/shadow && echo 'SHADOW_READABLE' || echo 'SHADOW_PROTECTED' 2>&1",
+          "test -w /etc/passwd && echo 'PASSWD_WRITABLE' || echo 'PASSWD_PROTECTED' 2>&1",
+          "sudo -n -l 2>&1 | grep -iE 'NOPASSWD|ALL' | head -3; echo 'SUDO_EXIT:'$?",
+          "groups 2>&1 | grep -qE 'docker|root' && echo 'PRIV_GROUP_DETECTED' || echo 'PRIV_GROUP_SAFE'",
+          "find / -name '.git' -type d -maxdepth 5 2>/dev/null | while read gd; do test -f $gd/config && grep -qiE 'password|token|credential' $gd/config && echo 'GIT_CRED_FOUND:'$gd/config; done; echo 'GIT_SCAN_DONE'",
+          "for d in /root /home/*; do test -f $d/.bash_history && test -r $d/.bash_history && grep -iE 'password|passwd|login|ssh |scp ' $d/.bash_history 2>/dev/null | head -5 | grep . && echo 'BASH_HIST_SUSPICIOUS:'$d/.bash_history; done; echo 'HIST_SCAN_DONE'",
+          "find /home /root /var /etc /opt /app /srv -not -path '*/node_modules/*' -not -path '*/usr/lib/*' -name '*.key' -o -name '*.p12' -o -name '*.pfx' -o -name '*.jks' -o -name '*.keystore' -o -name '*.secret' -o -name '*.token' -o -name 'credential*' 2>/dev/null | head -20; echo 'SECRET_SCAN_DONE'"
+        ]
+      },
+      "evolvedFrom": null,
+      "evolvedAt": null,
+      "deprecated": false
+    },
+    {
+      "contextId": "linux-alpine-busybox",
+      "environmentFingerprint": {
+        "osType": "linux",
+        "osFlavors": [
+          "alpine"
+        ],
+        "shellType": "ash",
+        "requiredTools": [
+          "cat",
+          "find",
+          "grep",
+          "test"
+        ],
+        "optionalTools": [
+          "stat",
+          "sudo",
+          "groups",
+          "wc"
+        ],
+        "minKernelVersion": "3.10.0",
+        "arch": [
+          "amd64",
+          "arm64"
+        ]
+      },
+      "envCheckCommands": [
+        "uname -s",
+        "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
+        "which cat find grep test stat sudo groups wc 2>/dev/null",
+        "echo $SHELL",
+        "uname -r",
+        "uname -m",
+        "id 2>&1"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "判定规则同 Debian。Alpine BusyBox find/grep/test 语法相同，sudo 可能不可用(exit=127=PASS)。",
+        "detectionCommands": [
+          "for d in /root /home/*; do test -d $d/.ssh && find $d/.ssh -type f 2>/dev/null | head -5 | while read f; do echo 'SSH_KEY:'$f; done; done; echo 'SSH_SCAN_DONE'",
+          "test -f /var/run/secrets/kubernetes.io/serviceaccount/token && echo 'K8S_SA_TOKEN_FOUND' || echo 'K8S_SA_TOKEN_NONE'",
+          "test -r /etc/shadow && echo 'SHADOW_READABLE' || echo 'SHADOW_PROTECTED' 2>&1",
+          "test -w /etc/passwd && echo 'PASSWD_WRITABLE' || echo 'PASSWD_PROTECTED' 2>&1",
+          "sudo -n -l 2>&1 | head -3; echo 'SUDO_EXIT:'$?",
+          "groups 2>&1 | grep -qE 'docker|root' && echo 'PRIV_GROUP_DETECTED' || echo 'PRIV_GROUP_SAFE'",
+          "find / -name '.git' -type d -maxdepth 5 2>/dev/null | while read gd; do test -f $gd/config && grep -qiE 'password|token' $gd/config && echo 'GIT_CRED:'$gd/config; done; echo 'GIT_DONE'",
+          "find /home /root /etc /opt /app -not -path '*/node_modules/*' -name '*.key' -o -name '*.pem' -o -name '*.secret' -o -name '*.token' 2>/dev/null | head -10; echo 'SECRET_DONE'"
+        ]
+      },
+      "evolvedFrom": "linux-debian-ubuntu-standard",
+      "evolvedAt": null,
+      "deprecated": false
+    },
+    {
+      "contextId": "windows-servercore-default",
+      "environmentFingerprint": {
+        "osType": "windows",
+        "osFlavors": [
+          "windows-servercore",
+          "windows-nanoserver"
+        ],
+        "shellType": "powershell",
+        "requiredTools": [
+          "powershell.exe",
+          "reg.exe"
+        ],
+        "optionalTools": [],
+        "minKernelVersion": "10.0.17763",
+        "arch": [
+          "amd64"
+        ]
+      },
+      "envCheckCommands": [
+        "ver",
+        "powershell.exe -Command \"$env:OS\"",
+        "powershell.exe -Command \"(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').ProductName\"",
+        "where powershell.exe reg.exe 2>nul"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "Windows 容器检查用户目录下的 .ssh、.aws 目录，注册表中的凭据管理器项，K8s SA Token 存在=FAIL。",
+        "detectionCommands": [
+          "powershell.exe -Command \"Get-ChildItem $env:USERPROFILE\\.ssh -ErrorAction SilentlyContinue | ForEach-Object { Write-Host 'SSH_KEY:' $_.FullName }\" 2>&1",
+          "powershell.exe -Command \"Test-Path $env:USERPROFILE\\.aws\\credentials\" 2>&1",
+          "powershell.exe -Command \"Test-Path /var/run/secrets/kubernetes.io/serviceaccount/token\" 2>&1",
+          "powershell.exe -Command \"whoami /all\" 2>&1 | findstr /I 'Privileges Group'",
+          "powershell.exe -Command \"Get-ChildItem env: | Where-Object { $_.Name -match 'AWS|GCP|AZURE|TOKEN|SECRET|PASSWORD|API_KEY' } | Format-Table Name\" 2>&1"
+        ]
+      },
+      "evolvedFrom": null,
+      "evolvedAt": null,
+      "deprecated": false
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "skillId": "SEC-K8S-CTX-006",
+  "skillName": "文件系统与软件安全",
+  "versionTimestamp": 1700000000000,
+  "riskLevel": "MEDIUM",
+  "description": "检测容器中的 SUID 文件、全局可写目录、/tmp 挂载安全标志（noexec）、渗透测试工具是否可访问、系统日志文件是否含敏感数据，以及已安装工具列表等软件层面的安全风险。",
+  "evolutionCount": 0,
+  "reportMetadata": {
+    "remediationFocus": "移除不必要的 SUID 二进制、chmod o-w 全局可写目录、为 /tmp 添加 noexec 挂载标志、移除渗透测试工具；对日文文件设置严格权限；精简容器基础镜像避免携带编译器和脚本解释器。"
+  },
+  "executionContexts": [
+    {
+      "contextId": "linux-debian-ubuntu-standard",
+      "environmentFingerprint": {
+        "osType": "linux",
+        "osFlavors": ["debian", "ubuntu"],
+        "shellType": "bash",
+        "requiredTools": ["cat", "find", "mount", "grep", "test"],
+        "optionalTools": ["stat", "wc", "head", "command"],
+        "minKernelVersion": "3.10.0",
+        "arch": ["amd64", "arm64"]
+      },
+      "envCheckCommands": [
+        "uname -s",
+        "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
+        "which cat find mount grep test stat wc head command 2>/dev/null",
+        "echo $SHELL",
+        "uname -r",
+        "uname -m"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "【判定硬规则】① SUID 文件数量多(>20)是常见容器情况，仅当发现 可写 SUID (-perm -4007) 时判 FAIL。② 全局可写目录存在=WARN(非必然FAIL)。③ /tmp 无 noexec=WARN。④ 渗透工具(john,hydra,nmap,sqlmap,socat,metasploit)=WARN(非FAIL)。⑤ 日志文件可读+含敏感词=WARN。⑥ gcc/g++/javac/go 等编译器存在=WARN(利于攻击者编译恶意代码)。⑦ 所有 find 命令的 'Permission denied' 是正常现象(PASS)，不影响判定。exit=127=工具不存在=PASS。",
+        "detectionCommands": [
+          "find / -type f -perm -4007 2>/dev/null | head -10; echo 'WRITABLE_SUID_SCAN_DONE'",
+          "find / -type d -perm -777 2>/dev/null | grep -v '^/proc\\|^/sys\\|^/dev' | head -20; echo 'WORLD_WRITABLE_DONE'",
+          "mount 2>/dev/null | grep ' /tmp ' | head -2; echo 'TMP_MOUNT_FLAGS:'$(mount 2>/dev/null | grep ' /tmp ' | grep -o 'noexec\\|nosuid\\|nodev' | tr '\\n' ' ')",
+          "for tool in john hydra nmap sqlmap socat; do command -v $tool 2>/dev/null && echo 'PENTOOL_FOUND:'$tool; done; echo 'PENTOOL_SCAN_DONE'",
+          "for tool in gcc g++ javac go python3 perl ruby; do command -v $tool 2>/dev/null && echo 'COMPILER_FOUND:'$tool; done; echo 'COMPILER_SCAN_DONE'",
+          "for lf in /var/log/auth.log /var/log/secure /var/log/messages /var/log/syslog /var/log/cloud-init.log /var/log/boot.log; do test -r $lf && echo 'LOG_READABLE:'$lf && grep -qiE 'password|secret|token' $lf 2>/dev/null && echo 'LOG_SENSITIVE:'$lf; done; echo 'LOG_SCAN_DONE'",
+          "for tool in curl wget nc python3 python perl ruby php node; do command -v $tool 2>/dev/null && echo 'NET_TOOL_FOUND:'$tool; done; echo 'NET_TOOL_SCAN_DONE'"
+        ]
+      },
+      "evolvedFrom": null,
+      "evolvedAt": null,
+      "deprecated": false
+    },
+    {
+      "contextId": "linux-alpine-busybox",
+      "environmentFingerprint": {
+        "osType": "linux",
+        "osFlavors": ["alpine"],
+        "shellType": "ash",
+        "requiredTools": ["cat", "find", "mount", "grep", "test"],
+        "optionalTools": ["stat", "wc"],
+        "minKernelVersion": "3.10.0",
+        "arch": ["amd64", "arm64"]
+      },
+      "envCheckCommands": [
+        "uname -s",
+        "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
+        "which cat find mount grep test stat wc 2>/dev/null",
+        "echo $SHELL",
+        "uname -r",
+        "uname -m"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "判定规则同 Debian。Alpine 可能无 command -v（可用 which 替代），EVOLVE 时注意。BusyBox find 选项可能略有不同但核心语法一致。",
+        "detectionCommands": [
+          "find / -type f -perm -4007 2>/dev/null | head -10; echo 'WSUID_DONE'",
+          "find / -type d -perm -777 2>/dev/null | grep -v '^/proc\\|^/sys\\|^/dev' | head -20; echo 'WORLD_WRITABLE_DONE'",
+          "mount 2>/dev/null | grep ' /tmp ' | head -2; echo 'TMP_FLAGS:'$(mount 2>/dev/null | grep ' /tmp ' | grep -o 'noexec\\|nosuid\\|nodev' | tr '\\n' ' ')",
+          "for tool in john hydra nmap sqlmap socat; do which $tool 2>/dev/null && echo 'PENTOOL:'$tool; done; echo 'PENTOOL_DONE'",
+          "for tool in gcc g++ go python3; do which $tool 2>/dev/null && echo 'COMPILER:'$tool; done; echo 'COMPILER_DONE'",
+          "for lf in /var/log/auth.log /var/log/messages /var/log/syslog; do test -r $lf && echo 'LOG_READABLE:'$lf && grep -qiE 'password|secret|token' $lf 2>/dev/null && echo 'LOG_SENSITIVE:'$lf; done; echo 'LOG_DONE'",
+          "for tool in curl wget nc python3 python php; do which $tool 2>/dev/null && echo 'NET_TOOL:'$tool; done; echo 'NET_TOOL_DONE'"
+        ]
+      },
+      "evolvedFrom": "linux-debian-ubuntu-standard",
+      "evolvedAt": null,
+      "deprecated": false
+    },
+    {
+      "contextId": "windows-servercore-default",
+      "environmentFingerprint": {
+        "osType": "windows",
+        "osFlavors": ["windows-servercore", "windows-nanoserver"],
+        "shellType": "powershell",
+        "requiredTools": ["powershell.exe"],
+        "optionalTools": [],
+        "minKernelVersion": "10.0.17763",
+        "arch": ["amd64"]
+      },
+      "envCheckCommands": [
+        "ver",
+        "powershell.exe -Command \"$env:OS\"",
+        "powershell.exe -Command \"(Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion').ProductName\"",
+        "where powershell.exe 2>nul"
+      ],
+      "executionLogic": {
+        "expectedBehavior": "Windows 容器中重点检查用户组权限、磁盘挂载状态和服务安全管理。net localgroup 和 Get-Service 是核心检测命令。",
+        "detectionCommands": [
+          "powershell.exe -Command \"net localgroup administrators\" 2>&1",
+          "powershell.exe -Command \"icacls C:\\ 2>&1 | Select-Object -First 10\"",
+          "powershell.exe -Command \"Get-PSDrive -PSProvider FileSystem | Format-Table Name,Used,Free\" 2>&1",
+          "powershell.exe -Command \"Get-Service | Where-Object {$_.Status -eq 'Running'} | Select-Object -First 15 | Format-Table Name,DisplayName\" 2>&1",
+          "powershell.exe -Command \"Get-HotFix | Select-Object -First 10 | Format-Table HotFixID,InstalledOn\" 2>&1"
+        ]
+      },
+      "evolvedFrom": null,
+      "evolvedAt": null,
+      "deprecated": false
+    }
+  ]
+}
