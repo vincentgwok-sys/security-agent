@@ -37,3 +37,7 @@ openspec/changes/**/.openspec.yaml
 
 # ── Sensitive configuration ──
 container-security-agent/src/main/resources/application.yml
+
+# ── Reference documents ──
+*.pdf
+pdf_text.txt
