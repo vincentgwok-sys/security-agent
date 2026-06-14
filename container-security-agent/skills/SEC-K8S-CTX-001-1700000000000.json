@@ -30,7 +30,7 @@
         "id 2>&1"
       ],
       "executionLogic": {
-        "expectedBehavior": "安全容器中，capsh --print 的 Current Effective 集合应为空或仅含基础权限（不含 CAP_SYS_ADMIN、CAP_SYS_PTRACE、CAP_NET_ADMIN 等）；mount 任何新文件系统应返回 'Operation not permitted'；/proc/1/status 中 Seccomp 应为 2（strict）或非零值；NoNewPrivs=1。高危信号：CapEff 包含 ffffffff（全权限）、mount tmpfs 成功、容器以 root (uid=0) 运行且无 user namespace。",
+        "expectedBehavior": "【判定硬规则】命令退出码 127 = 工具不存在 = PASS（不是漏洞）。mount 失败但 stderr 含 'Operation not permitted'/'Permission denied' = PASS。mount 成功（exit=0 且目录创建）= FAIL。CapEff=ffffffff 或含 CAP_SYS_ADMIN(bit 21)/CAP_SYS_PTRACE(bit 19) = FAIL。Seccomp=2(strict)或=1(filter)=PASS，Seccomp=0(disabled)=FAIL。NoNewPrivs=1=PASS，NoNewPrivs=0=FAIL。uid=0(gid=0) 且无 user namespace 隔离 = 需关注（非必然 FAIL，但提高风险权重）。",
         "detectionCommands": [
           "capsh --print 2>&1",
           "cat /proc/1/status 2>&1 | grep -E 'CapEff|Seccomp|NoNewPrivs'",
@@ -64,7 +64,7 @@
         "id 2>&1"
       ],
       "executionLogic": {
-        "expectedBehavior": "Alpine 容器安全标准同 Debian。特权操作应被拒绝，进程 CapEff 掩码不应含特权位。Alpine 的 BusyBox mount 可能行为略有不同，尤其注意 tmpfs 挂载是否被允许。Alpine 的 capsh 可能不可用，若缺失则从 /proc 读取 CapEff 代替。",
+        "expectedBehavior": "判定规则同 Debian 上下文。Alpine 可能无 capsh（exit=127=PASS），此时仅从 /proc 判定。BusyBox mount 行为可能不同，但 exit=0 且目录创建仍为 FAIL。CapEff=ffffffff = FAIL。",
         "detectionCommands": [
           "cat /proc/1/status 2>&1 | grep -E 'CapEff|Seccomp|NoNewPrivs'",
           "mount -t tmpfs none /tmp/test_mount_csagent 2>&1; rmdir /tmp/test_mount_csagent 2>/dev/null; echo 'MOUNT_EXIT:'$?",

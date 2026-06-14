@@ -29,7 +29,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "安全容器不应暴露宿主机文件系统。挂载点中不应出现 /var/run/docker.sock、/run/docker.sock、/run/containerd/containerd.sock、宿主机 /etc、/proc 或 /sys 的异常读写挂载。/proc/1/cgroup 应显示典型的容器 cgroup 路径（/docker/...、/kubepods/...），而非宿主机根 cgroup。特别注意 /proc/1/root 是否为符号链接到容器根（安全）还是宿主机根（危险）。",
+        "expectedBehavior": "【判定硬规则】find/df/mount 命令退出码非零但非 127 时需看具体输出，不能仅凭退出码判 FAIL。mount 输出中出现 /var/run/docker.sock、containerd.sock、/host、/rootfs、宿主机 /etc、/proc 或 /sys 的异常挂载 = FAIL。find 找到 docker.sock/containerd.sock = FAIL。/proc/1/cgroup 显示 '/' 或空（而非 /docker/... 或 /kubepods/...）= FAIL。/proc/1/root → 宿主机 '/' = FAIL。df -h 显示非 overlay/tmpfs 的大容量挂载 = 需关注。",
         "detectionCommands": [
           "mount 2>&1 | grep -E 'docker.sock|containerd.sock|/host|/rootfs|/proc|/sys/fs/cgroup' | head -10",
           "cat /proc/1/mounts 2>&1 | grep -E '/proc|/sys|/etc/kubernetes|/var/lib/kubelet|/var/lib/docker' | head -10",
@@ -63,7 +63,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "Alpine 容器不应用挂载宿主机敏感路径。Alpine 的 BusyBox 工具输出格式可能与 GNU 版本略有不同（如 df 输出），AI 判定时需适应。尤其关注 mount 输出中是否有 /host、/rootfs 等典型宿主机路径。",
+        "expectedBehavior": "判定规则同 Debian 上下文。Alpine BusyBox 工具输出格式与 GNU 可能不同（如 df 无 --local 等 GNU 扩展选项），适应即可。docker.sock/containerd.sock 存在 = FAIL。/host、/rootfs 挂载 = FAIL。/proc/1/cgroup 异常 = FAIL。",
         "detectionCommands": [
           "mount 2>&1 | head -20",
           "cat /proc/1/mounts 2>&1 | grep -E '/proc|/sys|/etc|/var' | head -10",

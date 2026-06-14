@@ -29,7 +29,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "安全的 seccomp 配置下：nsenter 和 unshare 应返回 'Operation not permitted'（EPERM）或被 seccomp 杀死（SIGSYS）；/proc/1/status 中 Seccomp=2（strict）或 Seccomp=1（filter）；NoNewPrivs=1；/proc/sys/kernel/unprivileged_userns_clone=0。高危信号：seccomp=0（disabled）、nsenter 成功进入宿主机命名空间、unshare 创建新命名空间成功。注意：nsenter 需要 --target PID 参数，在容器 PID namespace 中可能需要先找到宿主机可见的 PID。",
+        "expectedBehavior": "【判定硬规则】nsenter/unshare exit≠0 且 stderr 含 'Operation not permitted'/'Permission denied'/EPERM = PASS（seccomp/DAC 生效）。nsenter/unshare exit=0 且输出 'ESCAPED' = FAIL（容器逃逸成功）。Seccomp=2(strict)或=1(filter)=PASS，Seccomp=0=FAIL。NoNewPrivs=1=PASS，NoNewPrivs=0=FAIL。unprivileged_userns_clone=0=PASS（user namespace 限制生效），=1=需关注。exit=127=工具不存在=PASS。nsenter 在容器 PID namespace 中访问宿主 PID 失败是预期行为（PASS）。",
         "detectionCommands": [
           "cat /proc/1/status 2>&1 | grep -E '^Seccomp:'",
           "nsenter --mount=/proc/1/ns/mnt -- /bin/sh -c 'echo ESCAPED_TO_HOST_MNT_NS' 2>&1",
@@ -62,7 +62,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "Alpine 环境中 seccomp 检查逻辑同 Debian。Alpine 默认可能不含 nsenter/unshare 二进制，此情况下以 Seccomp 字段和 NoNewPrivs 为主要判断依据。若 nsenter 存在但执行被阻止（EPERM/SIGSYS），说明 seccomp 生效。",
+        "expectedBehavior": "判定规则同 Debian 上下文。Alpine 可能无 nsenter/unshare（exit=127=PASS），此时仅以 Seccomp 字段和 NoNewPrivs 判定。nsenter 存在但被阻止 = PASS，nsenter 成功 = FAIL。",
         "detectionCommands": [
           "cat /proc/1/status 2>&1 | grep -E '^Seccomp:'",
           "cat /proc/self/status 2>&1 | grep -E 'CapEff|NoNewPrivs|Seccomp'",
