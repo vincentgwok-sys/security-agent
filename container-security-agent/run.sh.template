@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Container Security Agent — 容器一键启动脚本
-# 同时启动后端（8080，已内嵌前端）和前端（5173）
+# 后端 JAR 已内嵌前端，直接访问 8080 端口即可使用完整 UI
 # 如果非 bash 环境（如 sh/dash），自动重新调用 bash 执行
 if [ -z "${BASH_VERSION:-}" ]; then
     exec bash "$0" "$@"
@@ -10,8 +10,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/container-security-agent-backend-__VERSION__"
 BACKEND_TAR="$SCRIPT_DIR/container-security-agent-backend-__VERSION__.tar.gz"
-FRONTEND_DIR="$SCRIPT_DIR/container-security-agent-frontend-__VERSION__"
-FRONTEND_TAR="$SCRIPT_DIR/container-security-agent-frontend-__VERSION__.tar.gz"
 
 # ── 自动解压 ──
 if [ ! -d "$BACKEND_DIR" ]; then
@@ -23,77 +21,10 @@ if [ ! -d "$BACKEND_DIR" ]; then
     tar xzf "$BACKEND_TAR" -C "$SCRIPT_DIR"
 fi
 
-if [ ! -d "$FRONTEND_DIR" ]; then
-    if [ ! -f "$FRONTEND_TAR" ]; then
-        echo "[ERROR] 未找到前端包: $FRONTEND_TAR"
-        exit 1
-    fi
-    echo "[INFO] 正在解压 $FRONTEND_TAR ..."
-    tar xzf "$FRONTEND_TAR" -C "$SCRIPT_DIR"
-fi
-
-# ── 清理函数 ──
-cleanup() {
-    echo ""
-    echo "[INFO] 正在停止服务..."
-    if [ -n "${BACKEND_PID:-}" ] && kill -0 "$BACKEND_PID" 2>/dev/null; then
-        kill "$BACKEND_PID" 2>/dev/null || true
-        wait "$BACKEND_PID" 2>/dev/null || true
-    fi
-    echo "[INFO] 服务已停止"
-}
-trap cleanup EXIT INT TERM
-
-# ── 启动后端（后台运行） ──
+# ── 启动后端 ──
 echo "============================================"
 echo " Container Security Agent"
 echo "============================================"
-echo "[INFO] 启动后端..."
+echo ""
 cd "$BACKEND_DIR"
-bash ./start.sh "$@" &
-BACKEND_PID=$!
-
-# ── 等待后端就绪 ──
-echo "[INFO] 等待后端就绪 (http://localhost:8080)..."
-for i in $(seq 1 30); do
-    if curl -s http://localhost:8080/api/skills >/dev/null 2>&1; then
-        echo "[INFO] 后端已就绪 ✓"
-        break
-    fi
-    if [ "$i" -eq 30 ]; then
-        echo "[ERROR] 后端启动超时，请检查日志"
-        exit 1
-    fi
-    sleep 2
-done
-
-# ── 启动前端（前台运行，接收容器信号） ──
-echo "[INFO] 启动前端 (http://localhost:5173)..."
-cd "$FRONTEND_DIR"
-
-find_python() {
-    for py in python3 python; do
-        if command -v "$py" &>/dev/null; then
-            echo "$py"
-            return 0
-        fi
-    done
-    return 1
-}
-
-PYTHON=$(find_python) || {
-    echo "[WARN] 未找到 Python 3，仅后端运行（已内嵌前端，访问 http://localhost:8080）"
-    echo "[INFO] 按 Ctrl+C 停止后端"
-    wait "$BACKEND_PID"
-    exit 0
-}
-
-echo ""
-echo "============================================"
-echo "  后端:  http://localhost:8080  (API + 前端)"
-echo "  前端:  http://localhost:5173  (独立前端)"
-echo "============================================"
-echo "  按 Ctrl+C 停止所有服务"
-echo ""
-
-exec "$PYTHON" -m http.server 5173
+exec bash ./start.sh "$@"
