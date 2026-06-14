@@ -165,8 +165,12 @@ mkdir -p "$SCRIPT_DIR/logs" "$SCRIPT_DIR/reports"
 if [ ! -f "$SCRIPT_DIR/application.yml" ]; then
   echo "[INFO] 首次运行，从 application-example.yml 复制配置模板..."
   cp "$SCRIPT_DIR/application-example.yml" "$SCRIPT_DIR/application.yml"
-  echo "[INFO] >>> 请编辑 application.yml 填入你的 API Key，然后重新运行 start.sh <<<"
-  exit 0
+  # 如果通过 --api-key 传入了 Key，则无需手动编辑，直接继续启动
+  if [ -z "${USER_API_KEY:-}" ]; then
+    echo "[INFO] >>> 请编辑 application.yml 填入你的 API Key，然后重新运行 start.sh <<<"
+    exit 0
+  fi
+  echo "[INFO] 已通过 --api-key 参数传入 Key，跳过手动配置"
 fi
 
 # ── 构建 JVM 参数 ──
