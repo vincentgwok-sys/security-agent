@@ -50,8 +50,6 @@
 cp src/main/resources/application-example.yml src/main/resources/application.yml
 ```
 
-本地 `application.yml` 已被 `.gitignore` 排除，不会提交到 Git。
-
 **必填环境变量：**
 
 ```bash

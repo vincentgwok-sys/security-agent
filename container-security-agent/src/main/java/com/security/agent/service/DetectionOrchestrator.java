@@ -275,7 +275,7 @@ public class DetectionOrchestrator {
 
         int cmdIndex = 0;
         int totalCommandExecutions = 0;
-        int maxTotalExecutions = commands.size() * (maxEvolveRounds + 1) * (maxContextEvolutions + 1);
+        int maxTotalExecutions = commands.size() * 3;
         if (maxTotalExecutions < 30) maxTotalExecutions = 30;
 
         while (cmdIndex < commands.size()) {
