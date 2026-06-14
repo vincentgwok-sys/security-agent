@@ -1,7 +1,6 @@
 # 容器安全智能检测 Agent — 项目技术总结
 
 > 项目周期：2026/06/11 — 2026/06/14（持续迭代中）
-> 代码仓库：GitHub + gitcode
 > 总提交数：49 commits
 
 ---
@@ -276,12 +275,8 @@ cd release
 ## 八、后续规划
 
 1. **WebSocket 实时推送**：当前任务列表通过 5 秒轮询刷新，升级为 WebSocket 可在检测完成时立即推送通知
-2. **CI/CD 集成**：提供 GitHub Actions / Jenkins Pipeline 模板，直接嵌入 CI 流程
+2. **CI/CD 集成**：提供 Pipeline 模板，直接嵌入现有 CI 流程
 3. **多容器并发扫描**：当前支持并行 Skill 检测，扩展为并行目标容器批量扫描
-4. **告警通知**：FAIL/CRITICAL 检测结果自动推送钉钉/飞书/企业微信
+4. **告警通知**：FAIL/CRITICAL 检测结果自动推送即时通讯平台
 5. **检测策略模板**：预置"生产环境基线""外部开发者沙箱""CI 构建容器"等场景模板
-6. **仓库空间优化**：Git LFS 迁移或 Release 页面分发，释放 gitcode 仓库空间（当前 1.2GB/1GB 超限）
-
----
-
-*项目地址：https://github.com/vincentgwok-sys/security-agent | https://gitcode.com/loki2132121/security-agent*
+6. **仓库空间优化**：使用 Git LFS 管理大型二进制文件，降低仓库体积
