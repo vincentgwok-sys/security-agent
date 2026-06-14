@@ -20,11 +20,15 @@
               <input type="radio" value="offline" v-model="form.connectionType" />
               📥 线下执行
             </label>
+            <label class="conn-type-btn" :class="{ active: form.connectionType === 'local' }">
+              <input type="radio" value="local" v-model="form.connectionType" />
+              💻 本地执行
+            </label>
           </div>
         </div>
 
-        <!-- Target / Jumpbox fields (hidden in offline mode) -->
-        <template v-if="form.connectionType !== 'offline'">
+        <!-- Target / Jumpbox fields (hidden in offline and local mode) -->
+        <template v-if="form.connectionType !== 'offline' && form.connectionType !== 'local'">
           <div class="form-group">
             <label>{{ form.connectionType === 'kubectl' ? '跳板机 IP *' : '目标容器 IP *' }}</label>
             <input v-model="form.targetIp" :placeholder="form.connectionType === 'kubectl' ? '跳板机地址，例如：10.0.0.100' : '例如：10.0.0.50'" required />
@@ -226,11 +230,12 @@ async function handleSubmit() {
   error.value = ''
   submitting.value = true
   try {
+    const isLocalOrOffline = form.connectionType === 'local' || form.connectionType === 'offline'
     const { data } = await createTask({
-      targetIp: form.targetIp || 'offline',
+      targetIp: isLocalOrOffline ? 'local' : form.targetIp,
       sshPort: form.sshPort,
-      sshUser: form.sshUser || 'offline',
-      sshPassword: form.sshPassword || 'offline',
+      sshUser: isLocalOrOffline ? 'local' : form.sshUser,
+      sshPassword: isLocalOrOffline ? 'local' : form.sshPassword,
       skillIds: form.skillIds,
       connectionType: form.connectionType,
       targetPod: form.connectionType === 'kubectl' ? form.targetPod : null,
