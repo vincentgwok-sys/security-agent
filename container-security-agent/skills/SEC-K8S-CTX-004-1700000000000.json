@@ -23,13 +23,14 @@
       "envCheckCommands": [
         "uname -s",
         "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
-        "which iptables nft ip curl wget ss host dig getent nslookup nmap nc 2>/dev/null",
+        "which cat grep ip curl wget ss iptables nft host getent 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则——必须遵守】① wget -qO- 在连接失败时仍可能返回退出码 0（已知缺陷），因此绝对禁止仅凭 wget 退出码 0 判定网络可达；连通性检测必须使用 curl --connect-timeout 并依据其退出码判定（curl exit=0 成功，exit=6 DNS 失败，exit=7 连接被拒/网络不可达，exit=28 超时，exit=52 无响应）。② 命令退出码 127 表示工具不存在（command not found），必须判定为 PASS 而非 FAIL——缺少工具不是安全漏洞。③ route/iptables 修改命令 exit=1 或 exit=2 通常为权限不足或语法错误，需要看 stderr 中的具体错误信息来区分。安全容器中网络隔离正常时：iptables/nft 规则修改被拒绝（Operation not permitted）；云元数据端点 169.254.169.254 不可达（curl exit=7 或 28）；Kubernetes API Server 不可达（curl exit=6 或 28）。高危信号（可判 FAIL）：iptables 修改成功且规则生效；curl 成功读取到元数据内容（exit=0 且输出非空）；ss -tlnp 显示监听 0.0.0.0 的非预期端口；ip neigh 发现非预期的 ARP 表项。nslookup 不可用时用 getent hosts 或 host 替代。EVOLVE 时绝对不要将 curl 替换为 wget 用于连通性检测。",
+        "expectedBehavior": "【判定硬规则——必须遵守】① 绝对禁止用 wget 做任何连通性检测。wget -qO- 在连接失败时仍可能返回退出码 0（已知缺陷，已造成多次误报）。EVOLVE 时绝对不得将 curl 替换为 wget，若 curl 不可用则直接标记 PASS（工具缺失，非安全缺陷）。② curl 退出码含义：exit=0+有内容=危险（元数据可读）；exit=6=DNS失败(PASS)；exit=7=连接被拒(PASS)；exit=28=超时(PASS)；exit=127=curl不存在(PASS)。③ exit=127=工具不存在=PASS；exit=1或2+i操作被拒绝(Operation not permitted)=PASS。④ 高危信号（FAIL）：curl 成功读取元数据且输出非空；ip route add 成功执行。ss -tlnp 仅作信息收集不做判定。",
+
         "detectionCommands": [
           "ip route show 2>&1 | head -10",
           "cat /etc/resolv.conf 2>&1",
@@ -53,20 +54,20 @@
         "osFlavors": ["alpine"],
         "shellType": "ash",
         "requiredTools": ["cat", "grep", "ip"],
-        "optionalTools": ["iptables", "curl", "wget", "ss", "host", "nslookup", "netstat"],
+        "optionalTools": ["iptables", "ss", "host", "nslookup", "netstat"],
         "minKernelVersion": "3.10.0",
         "arch": ["amd64", "arm64"]
       },
       "envCheckCommands": [
         "uname -s",
         "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
-        "which cat grep ip iptables curl wget ss host nslookup netstat 2>/dev/null",
+        "which cat grep ip curl ss iptables host nslookup netstat 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则——必须遵守】同 Debian 上下文规则。Alpine 的 BusyBox wget -q 模式下退出码不可靠（连接失败也可能返回 0），禁止用 wget 判定连通性。curl exit=7 是连接被拒（安全），exit=0 且有输出才是真正的元数据可达（危险）。exit=127 是工具不存在（PASS）。",
+        "expectedBehavior": "【判定硬规则——必须遵守】同 Debian 上下文全部规则。额外强调：Alpine 的 BusyBox wget -q 退出码完全不可靠（连接失败也返回 0），本 Skill 禁用 wget。EVOLVE 时若 curl 不可用也应直接 PASS，绝不能退化为 wget。",
         "detectionCommands": [
           "cat /etc/resolv.conf 2>&1",
           "ip route show 2>&1 | head -10",

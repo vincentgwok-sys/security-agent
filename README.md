@@ -1,7 +1,5 @@
 # Container Security Agent
 
-> ⚠️ **安全提示**：本项目曾因 `application.yml` 提交到 GitHub 导致 API Key 泄露。现已将所有敏感配置迁移到环境变量，`application.yml` 已加入 `.gitignore`。如果你曾 Fork 或克隆过含历史提交的仓库，请立即前往 DeepSeek 控制台**轮换你的 API Key**。
-
 基于 AI 的容器运行时安全检测工具。通过 SSH 或 kubectl 跳板机连接目标容器，执行预定义的安全检测命令，利用大模型分析回显并生成结构化的安全报告，附带 Kubernetes 修复建议。
 
 ## 架构概览
