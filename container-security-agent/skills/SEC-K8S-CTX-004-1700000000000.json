@@ -3,7 +3,7 @@
   "skillName": "网络隔离与横向移动",
   "versionTimestamp": 1700000000000,
   "riskLevel": "HIGH",
-  "description": "检测容器是否具备修改网络配置（iptables、路由表）的权限，以及能否嗅探或扫描集群内其他 Pod/Service 的网络流量，评估其横向移动风险。",
+  "description": "检测容器是否具备修改网络配置（iptables、路由表）的权限，以及能否嗅探或扫描集群内其他 Pod/Service 的网络流量，评估其横向移动风险。重点检测云元数据服务 (169.254.169.254) 可达性、Kubernetes API Server 访问、DNS 解析及网络嗅探能力。",
   "evolutionCount": 0,
   "reportMetadata": {
     "remediationFocus": "指导用户配置 Kubernetes NetworkPolicy 实现微隔离，结合 CNI 插件（如 Calico、Cilium）限制 Pod 间通信；必要时启用 Pod Security Standards 限制容器网络能力。"
@@ -16,27 +16,30 @@
         "osFlavors": ["debian", "ubuntu"],
         "shellType": "bash",
         "requiredTools": ["iptables", "ip", "cat", "grep"],
-        "optionalTools": ["nmap", "tcpdump", "curl", "wget", "netcat", "nslookup", "dig"],
+        "optionalTools": ["nmap", "tcpdump", "curl", "wget", "netcat", "nslookup", "dig", "ss"],
         "minKernelVersion": "3.10.0",
         "arch": ["amd64", "arm64"]
       },
       "envCheckCommands": [
         "uname -s",
         "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
-        "which iptables ip cat grep nmap tcpdump curl wget nc nslookup dig 2>/dev/null",
+        "which iptables ip cat grep nmap tcpdump curl wget nc nslookup dig ss 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "如果网络隔离策略正确配置，容器应无法修改 iptables 规则（Operation not permitted），且不应能访问集群 API Server 或其他未授权 Service。",
+        "expectedBehavior": "安全容器中：iptables 修改返回 'Operation not permitted'；云元数据端点 169.254.169.254 不可达（curl 返回退出码 7 或 28）；Kubernetes API Server 访问被 CNI 阻断（连接超时或拒绝）；DNS 解析可能成功但 TCP 连接被 NetworkPolicy 阻断。不安全容器中：iptables 修改成功、云元数据可读取、API Server 可访问、可监听或嗅探网络流量。注意：wget -qO- 在连接失败时可能仍返回退出码 0（不可靠），应优先使用 curl --connect-timeout 进行连通性检测。",
         "detectionCommands": [
           "iptables -L INPUT 2>&1 | head -10",
-          "iptables -A INPUT -j DROP 2>&1",
+          "iptables -A INPUT -j DROP 2>&1; echo 'EXIT_CODE:'$?",
           "ip route show 2>&1 | head -10",
           "cat /etc/resolv.conf 2>&1",
-          "curl -k https://kubernetes.default.svc.cluster.local 2>&1 | head -10",
-          "wget -qO- http://169.254.169.254/latest/meta-data/ 2>&1 | head -5"
+          "nslookup kubernetes.default.svc.cluster.local 2>&1",
+          "curl --connect-timeout 3 -sk https://kubernetes.default.svc.cluster.local 2>&1 | head -5; echo 'EXIT_CODE:'$?",
+          "curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1 | head -5; echo 'EXIT_CODE:'$?",
+          "ss -tlnp 2>&1 | head -10",
+          "ip neigh show 2>&1 | head -10"
         ]
       },
       "evolvedFrom": null,
@@ -50,26 +53,28 @@
         "osFlavors": ["alpine"],
         "shellType": "ash",
         "requiredTools": ["cat", "grep", "ip"],
-        "optionalTools": ["iptables", "curl", "wget", "nslookup"],
+        "optionalTools": ["iptables", "curl", "wget", "nslookup", "ss", "netstat"],
         "minKernelVersion": "3.10.0",
         "arch": ["amd64", "arm64"]
       },
       "envCheckCommands": [
         "uname -s",
         "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
-        "which cat grep ip iptables curl wget nslookup 2>/dev/null",
+        "which cat grep ip iptables curl wget nslookup ss netstat 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "Alpine 容器网络隔离要求同 Debian。Kubernetes NetworkPolicy 应在 CNI 层面阻止未授权流量。",
+        "expectedBehavior": "Alpine 容器安全要求同 Debian。网络隔离正常时：iptables 修改被阻止（Permission denied）；云元数据端点不可达；Kubernetes API 访问被 CNI 阻断。注意：Alpine 的 wget 为 BusyBox 实现，其 -q 模式下退出码可能不可靠（连接失败也可能返回 0），curl 优先于 wget 用于连通性检测。",
         "detectionCommands": [
           "cat /etc/resolv.conf 2>&1",
           "ip route show 2>&1 | head -10",
           "iptables -L INPUT 2>&1 | head -10",
-          "iptables -A INPUT -j DROP 2>&1",
-          "wget -qO- http://169.254.169.254/latest/meta-data/ 2>&1 | head -3"
+          "iptables -A INPUT -j DROP 2>&1; echo 'EXIT:'$?",
+          "nslookup kubernetes.default.svc.cluster.local 2>&1 | head -5",
+          "curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1 | head -3; echo 'EXIT:'$?",
+          "wget --timeout=3 -qO- http://169.254.169.254/latest/meta-data/ 2>&1 | head -3; echo 'EXIT:'$?"
         ]
       },
       "evolvedFrom": "linux-debian-ubuntu-standard",
@@ -83,7 +88,7 @@
         "osFlavors": ["windows-servercore", "windows-nanoserver"],
         "shellType": "powershell",
         "requiredTools": ["powershell.exe", "netsh.exe", "ipconfig.exe"],
-        "optionalTools": ["curl.exe"],
+        "optionalTools": ["curl.exe", "nslookup.exe"],
         "minKernelVersion": "10.0.17763",
         "arch": ["amd64"]
       },
@@ -94,13 +99,15 @@
         "where powershell.exe netsh.exe ipconfig.exe curl.exe 2>nul"
       ],
       "executionLogic": {
-        "expectedBehavior": "Windows 容器通过 Windows Filtering Platform (WFP) 和虚拟交换机实现网络隔离。容器内进程不应能修改防火墙规则或嗅探其他端点的流量。",
+        "expectedBehavior": "Windows 容器通过 Windows Filtering Platform (WFP) 和虚拟交换机实现网络隔离。安全容器中：netsh firewall 修改返回 'Access denied' 或 'The service has not been started'；netsh route add 被拒绝；元数据端点 169.254.169.254 不可达。不安全容器中：防火墙规则可修改、元数据可访问、可嗅探其他端点流量。",
         "detectionCommands": [
           "netsh advfirewall show currentprofile 2>&1",
+          "netsh advfirewall firewall add rule name=\"SecTest\" dir=in action=block protocol=TCP localport=12345 2>&1",
           "netsh interface ip show route 2>&1",
           "ipconfig /all 2>&1",
-          "powershell.exe -Command \"Test-NetConnection -ComputerName kubernetes.default.svc.cluster.local -Port 443 2>&1\"",
-          "powershell.exe -Command \"Resolve-DnsName kubernetes.default.svc.cluster.local 2>&1\""
+          "powershell.exe -Command \"Test-NetConnection -ComputerName kubernetes.default.svc.cluster.local -Port 443 -WarningAction SilentlyContinue\" 2>&1",
+          "powershell.exe -Command \"try { $r=Invoke-WebRequest -Uri http://169.254.169.254/latest/meta-data/ -TimeoutSec 3 -UseBasicParsing; Write-Host 'METADATA_REACHABLE'; $r.Content | Select-Object -First 3 } catch { Write-Host 'BLOCKED:' $_.Exception.Message }\" 2>&1",
+          "powershell.exe -Command \"Resolve-DnsName kubernetes.default.svc.cluster.local -ErrorAction SilentlyContinue\" 2>&1"
         ]
       },
       "evolvedFrom": null,
