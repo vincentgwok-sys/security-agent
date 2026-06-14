@@ -143,7 +143,10 @@
       <div class="modal-content">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <h3>报告 JSON</h3>
-          <button class="btn btn-sm btn-secondary" @click="showJson = false">关闭</button>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-sm btn-primary" @click="copyJson">{{ copyLabel }}</button>
+            <button class="btn btn-sm btn-secondary" @click="showJson = false">关闭</button>
+          </div>
         </div>
         <pre class="json-pre">{{ jsonText }}</pre>
       </div>
@@ -164,6 +167,7 @@ const report = ref(null)
 const loading = ref(true)
 const showJson = ref(false)
 const jsonText = ref('')
+const copyLabel = ref('复制')
 
 const circumference = 2 * Math.PI * 52
 
@@ -204,11 +208,23 @@ function tlClass(status) {
 
 async function loadJson() {
   showJson.value = true
+  copyLabel.value = '复制'
   try {
     const { data } = await getJsonReport(props.taskId)
     jsonText.value = JSON.stringify(data, null, 2)
   } catch {
     jsonText.value = '加载失败'
+  }
+}
+
+async function copyJson() {
+  try {
+    await navigator.clipboard.writeText(jsonText.value)
+    copyLabel.value = '已复制'
+    setTimeout(() => { copyLabel.value = '复制' }, 2000)
+  } catch {
+    copyLabel.value = '失败'
+    setTimeout(() => { copyLabel.value = '复制' }, 2000)
   }
 }
 
