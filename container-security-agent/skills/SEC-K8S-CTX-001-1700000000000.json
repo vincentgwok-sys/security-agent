@@ -16,25 +16,27 @@
         "osFlavors": ["debian", "ubuntu"],
         "shellType": "bash",
         "requiredTools": ["capsh", "cat", "mount", "grep"],
-        "optionalTools": ["getfattr", "attr"],
+        "optionalTools": ["getfattr", "attr", "unshare", "nsenter"],
         "minKernelVersion": "3.10.0",
         "arch": ["amd64", "arm64"]
       },
       "envCheckCommands": [
         "uname -s",
-        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
-        "which capsh cat mount grep 2>/dev/null",
+        "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
+        "which capsh cat mount grep getfattr nsenter unshare 2>/dev/null",
         "echo $SHELL",
         "uname -r",
-        "uname -m"
+        "uname -m",
+        "id 2>&1"
       ],
       "executionLogic": {
-        "expectedBehavior": "如果容器安全隔离正常，任何特权操作或高危工具调用应被拒绝（如 Operation not permitted），且进程的 CapEff 掩码不应包含特权位。",
+        "expectedBehavior": "安全容器中，capsh --print 的 Current Effective 集合应为空或仅含基础权限（不含 CAP_SYS_ADMIN、CAP_SYS_PTRACE、CAP_NET_ADMIN 等）；mount 任何新文件系统应返回 'Operation not permitted'；/proc/1/status 中 Seccomp 应为 2（strict）或非零值；NoNewPrivs=1。高危信号：CapEff 包含 ffffffff（全权限）、mount tmpfs 成功、容器以 root (uid=0) 运行且无 user namespace。",
         "detectionCommands": [
           "capsh --print 2>&1",
-          "cat /proc/1/status | grep CapEff",
-          "mount -t tmpfs none /tmp/test_mount 2>&1",
-          "cat /proc/1/status | grep -E '^Seccomp:'"
+          "cat /proc/1/status 2>&1 | grep -E 'CapEff|Seccomp|NoNewPrivs'",
+          "mount -t tmpfs none /tmp/test_mount_csagent 2>&1; rmdir /tmp/test_mount_csagent 2>/dev/null; echo 'MOUNT_EXIT:'$?",
+          "cat /proc/self/status 2>&1 | grep -E '^Uid:|^Gid:|CapEff|CapPrm|NoNewPrivs'",
+          "cat /proc/sys/kernel/unprivileged_userns_clone 2>&1"
         ]
       },
       "evolvedFrom": null,
@@ -48,25 +50,26 @@
         "osFlavors": ["alpine"],
         "shellType": "ash",
         "requiredTools": ["cat", "grep", "mount"],
-        "optionalTools": [],
+        "optionalTools": ["capsh"],
         "minKernelVersion": "3.10.0",
         "arch": ["amd64", "arm64"]
       },
       "envCheckCommands": [
         "uname -s",
-        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
-        "which cat grep mount 2>/dev/null",
+        "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
+        "which cat grep mount capsh 2>/dev/null",
         "echo $SHELL",
         "uname -r",
-        "uname -m"
+        "uname -m",
+        "id 2>&1"
       ],
       "executionLogic": {
-        "expectedBehavior": "与 Debian 环境一致：特权操作应被拒绝，进程 CapEff 掩码不应含特权位。Alpine 中无 capsh，需用其他方式检测。",
+        "expectedBehavior": "Alpine 容器安全标准同 Debian。特权操作应被拒绝，进程 CapEff 掩码不应含特权位。Alpine 的 BusyBox mount 可能行为略有不同，尤其注意 tmpfs 挂载是否被允许。Alpine 的 capsh 可能不可用，若缺失则从 /proc 读取 CapEff 代替。",
         "detectionCommands": [
-          "cat /proc/1/status | grep CapEff",
-          "cat /proc/1/status | grep -E '^Seccomp:'",
-          "mount 2>&1 | grep -E '(proc|sys|tmpfs)'",
-          "cat /proc/self/mounts | grep -E '/proc|/sys' | head -5"
+          "cat /proc/1/status 2>&1 | grep -E 'CapEff|Seccomp|NoNewPrivs'",
+          "mount -t tmpfs none /tmp/test_mount_csagent 2>&1; rmdir /tmp/test_mount_csagent 2>/dev/null; echo 'MOUNT_EXIT:'$?",
+          "cat /proc/self/mounts 2>&1 | grep -E '/proc|/sys' | head -5",
+          "cat /proc/self/status 2>&1 | grep -E '^Uid:|CapEff|NoNewPrivs'"
         ]
       },
       "evolvedFrom": "linux-debian-ubuntu-standard",

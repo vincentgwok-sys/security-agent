@@ -16,26 +16,27 @@
         "osFlavors": ["debian", "ubuntu"],
         "shellType": "bash",
         "requiredTools": ["mount", "cat", "df", "find", "grep"],
-        "optionalTools": ["lsblk", "stat"],
+        "optionalTools": ["lsblk", "stat", "readlink", "fdisk"],
         "minKernelVersion": "3.10.0",
         "arch": ["amd64", "arm64"]
       },
       "envCheckCommands": [
         "uname -s",
-        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
-        "which mount cat df find grep 2>/dev/null",
+        "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
+        "which mount cat df find grep lsblk stat readlink 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "安全容器不应暴露宿主机文件系统。挂载点中不应出现 /var/run/docker.sock、宿主机 /etc、/proc 或 /sys 的异常读写挂载。",
+        "expectedBehavior": "安全容器不应暴露宿主机文件系统。挂载点中不应出现 /var/run/docker.sock、/run/docker.sock、/run/containerd/containerd.sock、宿主机 /etc、/proc 或 /sys 的异常读写挂载。/proc/1/cgroup 应显示典型的容器 cgroup 路径（/docker/...、/kubepods/...），而非宿主机根 cgroup。特别注意 /proc/1/root 是否为符号链接到容器根（安全）还是宿主机根（危险）。",
         "detectionCommands": [
-          "mount 2>&1 | grep -E '/var/run/docker.sock|/run/docker.sock'",
-          "cat /proc/1/mounts | grep -E '/proc|/sys|/etc/kubernetes|/var/lib/kubelet'",
-          "df -h | grep -E '/host|/rootfs|/proc'",
-          "find / -name 'docker.sock' -type s 2>&1 | head -5",
-          "cat /proc/self/cgroup 2>&1 | head -5"
+          "mount 2>&1 | grep -E 'docker.sock|containerd.sock|/host|/rootfs|/proc|/sys/fs/cgroup' | head -10",
+          "cat /proc/1/mounts 2>&1 | grep -E '/proc|/sys|/etc/kubernetes|/var/lib/kubelet|/var/lib/docker' | head -10",
+          "ls -la /*.sock /var/run/*.sock /run/*.sock 2>&1 | head -5",
+          "find / -name 'docker.sock' -o -name 'containerd.sock' -type s 2>&1 | head -5",
+          "cat /proc/self/cgroup 2>&1 | head -5",
+          "df -h 2>&1 | grep -vE '^Filesystem|^tmpfs|^overlay|^/dev/loop' | head -10"
         ]
       },
       "evolvedFrom": null,
@@ -49,26 +50,27 @@
         "osFlavors": ["alpine"],
         "shellType": "ash",
         "requiredTools": ["mount", "cat", "df", "find", "grep"],
-        "optionalTools": [],
+        "optionalTools": ["lsblk"],
         "minKernelVersion": "3.10.0",
         "arch": ["amd64", "arm64"]
       },
       "envCheckCommands": [
         "uname -s",
-        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
-        "which mount cat df find grep 2>/dev/null",
+        "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
+        "which mount cat df find grep lsblk 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "同 Debian 环境。Alpine 容器不应挂载宿主机敏感路径，尤其关注挂载列表中的宿主机路径。",
+        "expectedBehavior": "Alpine 容器不应用挂载宿主机敏感路径。Alpine 的 BusyBox 工具输出格式可能与 GNU 版本略有不同（如 df 输出），AI 判定时需适应。尤其关注 mount 输出中是否有 /host、/rootfs 等典型宿主机路径。",
         "detectionCommands": [
-          "mount 2>&1",
-          "cat /proc/1/mounts | grep -E '/proc|/sys|/etc' | head -10",
-          "df -h 2>&1",
-          "find / -name 'docker.sock' -type s 2>&1 | head -3",
-          "cat /proc/self/cgroup 2>&1 | head -5"
+          "mount 2>&1 | head -20",
+          "cat /proc/1/mounts 2>&1 | grep -E '/proc|/sys|/etc|/var' | head -10",
+          "ls -la /var/run/*.sock /run/*.sock 2>&1 | head -5",
+          "find / -name 'docker.sock' -o -name 'containerd.sock' -type s 2>&1 | head -3",
+          "cat /proc/self/cgroup 2>&1 | head -5",
+          "df -h 2>&1 | head -10"
         ]
       },
       "evolvedFrom": "linux-debian-ubuntu-standard",
@@ -98,7 +100,8 @@
           "net use 2>&1",
           "powershell.exe -Command \"Get-PSDrive | Where-Object {$_.Provider.Name -eq 'FileSystem'} | Format-Table Name,Root\"",
           "powershell.exe -Command \"Get-SmbMapping 2>&1\"",
-          "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\docker\" 2>&1"
+          "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Services\\docker\" 2>&1",
+          "powershell.exe -Command \"Test-Path '\\\\.\\pipe\\docker_engine' 2>&1\""
         ]
       },
       "evolvedFrom": null,

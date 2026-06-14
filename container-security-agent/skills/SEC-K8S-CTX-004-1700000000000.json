@@ -3,7 +3,7 @@
   "skillName": "网络隔离与横向移动",
   "versionTimestamp": 1700000000000,
   "riskLevel": "HIGH",
-  "description": "检测容器是否具备修改网络配置（iptables、路由表）的权限，以及能否嗅探或扫描集群内其他 Pod/Service 的网络流量，评估其横向移动风险。重点检测云元数据服务 (169.254.169.254) 可达性、Kubernetes API Server 访问、DNS 解析及网络嗅探能力。",
+  "description": "检测容器是否具备修改网络配置（iptables、路由表）的权限，以及能否访问云元数据服务（169.254.169.254）、Kubernetes API Server、集群内其他 Service 等，评估其横向移动风险。",
   "evolutionCount": 0,
   "reportMetadata": {
     "remediationFocus": "指导用户配置 Kubernetes NetworkPolicy 实现微隔离，结合 CNI 插件（如 Calico、Cilium）限制 Pod 间通信；必要时启用 Pod Security Standards 限制容器网络能力。"
@@ -15,31 +15,31 @@
         "osType": "linux",
         "osFlavors": ["debian", "ubuntu"],
         "shellType": "bash",
-        "requiredTools": ["iptables", "ip", "cat", "grep"],
-        "optionalTools": ["nmap", "tcpdump", "curl", "wget", "netcat", "nslookup", "dig", "ss"],
+        "requiredTools": ["cat", "grep", "ip", "curl"],
+        "optionalTools": ["iptables", "nft", "wget", "ss", "host", "dig", "getent", "nslookup", "nmap", "tcpdump", "netcat"],
         "minKernelVersion": "3.10.0",
         "arch": ["amd64", "arm64"]
       },
       "envCheckCommands": [
         "uname -s",
-        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
-        "which iptables ip cat grep nmap tcpdump curl wget nc nslookup dig ss 2>/dev/null",
+        "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
+        "which iptables nft ip curl wget ss host dig getent nslookup nmap nc 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "安全容器中：iptables 修改返回 'Operation not permitted'；云元数据端点 169.254.169.254 不可达（curl 返回退出码 7 或 28）；Kubernetes API Server 访问被 CNI 阻断（连接超时或拒绝）；DNS 解析可能成功但 TCP 连接被 NetworkPolicy 阻断。不安全容器中：iptables 修改成功、云元数据可读取、API Server 可访问、可监听或嗅探网络流量。注意：wget -qO- 在连接失败时可能仍返回退出码 0（不可靠），应优先使用 curl --connect-timeout 进行连通性检测。",
+        "expectedBehavior": "安全容器中网络隔离正常时：iptables/nft 规则修改被拒绝（Operation not permitted 或 Permission denied）；云元数据端点 169.254.169.254 不可达（curl exit=7 连接被拒或 exit=28 超时）；Kubernetes API Server 和集群内 Service 不可达（curl exit=6 DNS 解析失败，或 exit=28 连接超时）；DNS 解析可能成功但 TCP 连接被 NetworkPolicy 阻断；进程不应监听 0.0.0.0 的非预期端口。高危信号：iptables 修改成功、元数据可读、API Server 可访问、可监听监听任意端口、可嗅探 ARP 或网络流量。注意：wget -qO- 在连接失败时可能仍返回退出码 0（不可靠，已知问题），curl --connect-timeout 必须用于连通性检测，需显式捕获退出码。nslookup 在部分容器中不可用，应优先使用 getent hosts 或 host 命令做 DNS 检测。",
         "detectionCommands": [
-          "iptables -L INPUT 2>&1 | head -10",
-          "iptables -A INPUT -j DROP 2>&1; echo 'EXIT_CODE:'$?",
           "ip route show 2>&1 | head -10",
           "cat /etc/resolv.conf 2>&1",
-          "nslookup kubernetes.default.svc.cluster.local 2>&1",
-          "curl --connect-timeout 3 -sk https://kubernetes.default.svc.cluster.local 2>&1 | head -5; echo 'EXIT_CODE:'$?",
-          "curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1 | head -5; echo 'EXIT_CODE:'$?",
+          "iptables -L INPUT 2>&1 | head -10; echo 'IPTABLES_EXIT:'$?",
+          "iptables -A INPUT -j DROP 2>&1; echo 'IPTABLES_MODIFY_EXIT:'$?",
+          "curl --connect-timeout 3 -sk https://kubernetes.default.svc.cluster.local 2>&1 | head -5; echo 'K8S_API_EXIT:'$?",
+          "curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1 | head -5; echo 'METADATA_EXIT:'$?",
           "ss -tlnp 2>&1 | head -10",
-          "ip neigh show 2>&1 | head -10"
+          "ip neigh show 2>&1 | head -10",
+          "getent hosts google.com 2>&1; echo 'DNS_EXIT:'$?"
         ]
       },
       "evolvedFrom": null,
@@ -53,28 +53,29 @@
         "osFlavors": ["alpine"],
         "shellType": "ash",
         "requiredTools": ["cat", "grep", "ip"],
-        "optionalTools": ["iptables", "curl", "wget", "nslookup", "ss", "netstat"],
+        "optionalTools": ["iptables", "curl", "wget", "ss", "host", "nslookup", "netstat"],
         "minKernelVersion": "3.10.0",
         "arch": ["amd64", "arm64"]
       },
       "envCheckCommands": [
         "uname -s",
-        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
-        "which cat grep ip iptables curl wget nslookup ss netstat 2>/dev/null",
+        "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
+        "which cat grep ip iptables curl wget ss host nslookup netstat 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "Alpine 容器安全要求同 Debian。网络隔离正常时：iptables 修改被阻止（Permission denied）；云元数据端点不可达；Kubernetes API 访问被 CNI 阻断。注意：Alpine 的 wget 为 BusyBox 实现，其 -q 模式下退出码可能不可靠（连接失败也可能返回 0），curl 优先于 wget 用于连通性检测。",
+        "expectedBehavior": "Alpine 容器网络隔离要求同 Debian。注意：Alpine 的 BusyBox wget 在 -q 模式下退出码不可靠（连接失败也可能返回 0），curl 优先。Alpine 可能无 iptables（或为 iptables-legacy），可用 ip route 和 ss 作为替代检测手段。",
         "detectionCommands": [
           "cat /etc/resolv.conf 2>&1",
           "ip route show 2>&1 | head -10",
-          "iptables -L INPUT 2>&1 | head -10",
-          "iptables -A INPUT -j DROP 2>&1; echo 'EXIT:'$?",
-          "nslookup kubernetes.default.svc.cluster.local 2>&1 | head -5",
-          "curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1 | head -3; echo 'EXIT:'$?",
-          "wget --timeout=3 -qO- http://169.254.169.254/latest/meta-data/ 2>&1 | head -3; echo 'EXIT:'$?"
+          "iptables -L INPUT 2>&1 | head -10; echo 'IPTABLES_EXIT:'$?",
+          "iptables -A INPUT -j DROP 2>&1; echo 'IPTABLES_MODIFY_EXIT:'$?",
+          "curl --connect-timeout 3 -s http://169.254.169.254/latest/meta-data/ 2>&1 | head -3; echo 'METADATA_EXIT:'$?",
+          "curl --connect-timeout 3 -sk https://kubernetes.default.svc.cluster.local 2>&1 | head -3; echo 'K8S_API_EXIT:'$?",
+          "ss -tlnp 2>&1 | head -10",
+          "wget --timeout=3 -qO- http://169.254.169.254/latest/meta-data/ 2>&1 | head -3; echo 'WGET_EXIT:'$?"
         ]
       },
       "evolvedFrom": "linux-debian-ubuntu-standard",
@@ -99,7 +100,7 @@
         "where powershell.exe netsh.exe ipconfig.exe curl.exe 2>nul"
       ],
       "executionLogic": {
-        "expectedBehavior": "Windows 容器通过 Windows Filtering Platform (WFP) 和虚拟交换机实现网络隔离。安全容器中：netsh firewall 修改返回 'Access denied' 或 'The service has not been started'；netsh route add 被拒绝；元数据端点 169.254.169.254 不可达。不安全容器中：防火墙规则可修改、元数据可访问、可嗅探其他端点流量。",
+        "expectedBehavior": "Windows 容器通过 Windows Filtering Platform (WFP) 和虚拟交换机实现网络隔离。安全容器中：netsh firewall 修改返回 'Access denied'；元数据端点 169.254.169.254 不可达（Invoke-WebRequest 抛异常）。不安全容器中：防火墙规则可修改、元数据可访问。",
         "detectionCommands": [
           "netsh advfirewall show currentprofile 2>&1",
           "netsh advfirewall firewall add rule name=\"SecTest\" dir=in action=block protocol=TCP localport=12345 2>&1",

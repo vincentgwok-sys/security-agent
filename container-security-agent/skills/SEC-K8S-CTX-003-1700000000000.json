@@ -3,7 +3,7 @@
   "skillName": "系统调用与内核攻击面",
   "versionTimestamp": 1700000000000,
   "riskLevel": "HIGH",
-  "description": "检测容器是否可执行高危系统调用（如 unshare、nsenter），以及 seccomp 安全配置是否生效，评估其对内核的攻击面大小。",
+  "description": "检测容器是否可执行高危系统调用（如 unshare、nsenter、ptrace），以及 seccomp 安全配置是否生效，评估其对内核的攻击面大小。",
   "evolutionCount": 0,
   "reportMetadata": {
     "remediationFocus": "指导用户配置 Kubernetes 的 seccompProfile（RuntimeDefault 或自定义 seccomp 配置文件），限制容器可用的系统调用集合，降低内核漏洞利用风险。"
@@ -15,27 +15,27 @@
         "osType": "linux",
         "osFlavors": ["debian", "ubuntu"],
         "shellType": "bash",
-        "requiredTools": ["cat", "grep", "unshare", "nsenter"],
-        "optionalTools": ["strace", "seccomp-tools"],
+        "requiredTools": ["cat", "grep", "nsenter"],
+        "optionalTools": ["unshare", "strace", "capsh", "bpftool"],
         "minKernelVersion": "3.10.0",
         "arch": ["amd64", "arm64"]
       },
       "envCheckCommands": [
         "uname -s",
-        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
-        "which cat grep unshare nsenter 2>/dev/null",
+        "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
+        "which cat grep nsenter unshare strace capsh 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "如果 seccomp 配置正常，nsenter 和 unshare 等系统调用应被拦截（Operation not permitted 或 EPERM）。/proc/1/status 中的 Seccomp 字段应为 2（strict）或非零值。",
+        "expectedBehavior": "安全的 seccomp 配置下：nsenter 和 unshare 应返回 'Operation not permitted'（EPERM）或被 seccomp 杀死（SIGSYS）；/proc/1/status 中 Seccomp=2（strict）或 Seccomp=1（filter）；NoNewPrivs=1；/proc/sys/kernel/unprivileged_userns_clone=0。高危信号：seccomp=0（disabled）、nsenter 成功进入宿主机命名空间、unshare 创建新命名空间成功。注意：nsenter 需要 --target PID 参数，在容器 PID namespace 中可能需要先找到宿主机可见的 PID。",
         "detectionCommands": [
-          "cat /proc/1/status | grep -E '^Seccomp:'",
-          "unshare -U /bin/sh -c 'echo escaped' 2>&1",
-          "nsenter --mount=/proc/1/ns/mnt -- /bin/sh -c 'echo escaped' 2>&1",
+          "cat /proc/1/status 2>&1 | grep -E '^Seccomp:'",
+          "nsenter --mount=/proc/1/ns/mnt -- /bin/sh -c 'echo ESCAPED_TO_HOST_MNT_NS' 2>&1",
+          "unshare -U /bin/sh -c 'echo ESCAPED_VIA_USERNS' 2>&1",
           "cat /proc/sys/kernel/unprivileged_userns_clone 2>&1",
-          "cat /proc/self/status | grep -E 'CapEff|NoNewPrivs'"
+          "cat /proc/self/status 2>&1 | grep -E 'CapEff|NoNewPrivs|Seccomp'"
         ]
       },
       "evolvedFrom": null,
@@ -49,26 +49,26 @@
         "osFlavors": ["alpine"],
         "shellType": "ash",
         "requiredTools": ["cat", "grep"],
-        "optionalTools": ["unshare", "nsenter"],
+        "optionalTools": ["nsenter", "unshare"],
         "minKernelVersion": "3.10.0",
         "arch": ["amd64", "arm64"]
       },
       "envCheckCommands": [
         "uname -s",
-        "cat /etc/os-release 2>/dev/null | grep '^ID=' | head -1",
-        "which cat grep unshare nsenter 2>/dev/null",
+        "cat /etc/os-release 2>/dev/null | grep -E '^ID=|^VERSION_ID=' | head -3",
+        "which cat grep nsenter unshare 2>/dev/null",
         "echo $SHELL",
         "uname -r",
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "Alpine 环境中 seccomp 检查逻辑同 Debian。Alpine 默认可能不含 unshare/nsenter 二进制，此情况下 seccomp 字段和 NoNewPrivs 是主要判断依据。",
+        "expectedBehavior": "Alpine 环境中 seccomp 检查逻辑同 Debian。Alpine 默认可能不含 nsenter/unshare 二进制，此情况下以 Seccomp 字段和 NoNewPrivs 为主要判断依据。若 nsenter 存在但执行被阻止（EPERM/SIGSYS），说明 seccomp 生效。",
         "detectionCommands": [
-          "cat /proc/1/status | grep -E '^Seccomp:'",
-          "cat /proc/self/status | grep -E 'CapEff|NoNewPrivs'",
+          "cat /proc/1/status 2>&1 | grep -E '^Seccomp:'",
+          "cat /proc/self/status 2>&1 | grep -E 'CapEff|NoNewPrivs|Seccomp'",
           "cat /proc/sys/kernel/unprivileged_userns_clone 2>&1",
-          "unshare -U /bin/sh -c 'echo escaped' 2>&1",
-          "nsenter --mount=/proc/1/ns/mnt -- /bin/sh -c 'echo escaped' 2>&1"
+          "nsenter --mount=/proc/1/ns/mnt -- /bin/sh -c 'echo ESCAPED_TO_HOST_MNT_NS' 2>&1",
+          "unshare -U /bin/sh -c 'echo ESCAPED_VIA_USERNS' 2>&1"
         ]
       },
       "evolvedFrom": "linux-debian-ubuntu-standard",
@@ -95,10 +95,10 @@
       "executionLogic": {
         "expectedBehavior": "Windows 容器通过 HCS (Host Compute Service) 隔离。应验证容器版本和隔离模式，确认是否运行在 Hyper-V 隔离模式或进程隔离模式，评估内核共享风险。",
         "detectionCommands": [
-          "systeminfo | findstr /C:\"OS Name\" /C:\"OS Version\" 2>&1",
-          "powershell.exe -Command \"Get-Process -Id $pid | Select-Object -Property ProcessName,SessionId,IsWinProcess\"",
+          "systeminfo 2>&1 | findstr /C:\"OS Name\" /C:\"OS Version\"",
+          "powershell.exe -Command \"Get-Process -Id $pid | Select-Object -Property ProcessName,SessionId\"",
           "reg query \"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Virtualization\" 2>&1",
-          "powershell.exe -Command \"(Get-Service vmcompute,hcs).Status\" 2>&1"
+          "powershell.exe -Command \"(Get-Service vmcompute,hcs -ErrorAction SilentlyContinue).Status\" 2>&1"
         ]
       },
       "evolvedFrom": null,
