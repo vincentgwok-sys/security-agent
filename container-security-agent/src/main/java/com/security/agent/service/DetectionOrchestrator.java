@@ -274,7 +274,16 @@ public class DetectionOrchestrator {
                 : Collections.emptyList();
 
         int cmdIndex = 0;
+        int totalCommandExecutions = 0;
+        int maxTotalExecutions = commands.size() * (maxEvolveRounds + 1) * (maxContextEvolutions + 1);
+        if (maxTotalExecutions < 30) maxTotalExecutions = 30;
+
         while (cmdIndex < commands.size()) {
+            totalCommandExecutions++;
+            if (totalCommandExecutions > maxTotalExecutions) {
+                log.warn("[{}] 命令总执行次数已达上限 ({}), 终止检测", skillId, maxTotalExecutions);
+                break;
+            }
             String command = commands.get(cmdIndex);
             int round = 0;
             String currentCommand = command;
@@ -371,10 +380,17 @@ public class DetectionOrchestrator {
                         if (newCtx == null) break;
                         activeContext = newCtx;
                         skill.getExecutionContexts().add(activeContext);
-                        commands = activeContext.getExecutionLogic() != null
+                        List<String> newCommands = activeContext.getExecutionLogic() != null
                                 && activeContext.getExecutionLogic().getDetectionCommands() != null
                                 ? new ArrayList<>(activeContext.getExecutionLogic().getDetectionCommands())
                                 : Collections.emptyList();
+                        // 新 Context 命令与旧相同 — 不重置，继续执行当前命令
+                        if (newCommands.equals(commands)) {
+                            log.info("[{}] 新 Context 命令与旧相同，不重置 cmdIndex", skillId);
+                            cmdIndex++;
+                            break;
+                        }
+                        commands = newCommands;
                         cmdIndex = 0;
                         isContextEvolved = true;
                         break;
