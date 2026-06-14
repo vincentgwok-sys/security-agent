@@ -46,14 +46,15 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则】① mount输出中发现 docker.sock/containerd.sock=/host=/rootfs 异常挂载=FAIL。② find 找到 docker.sock/containerd.sock=FAIL。③ /proc/1/cgroup 显示 '/' 或空=FAIL。④ df -h 显示的设备容量不代表容器可访问的数据量。K8s 标准 bind-mount（/etc/hosts, /etc/hostname, /etc/resolv.conf, /dev/termination-log）底层可能是大容量宿主机卷，但容器仅可见单个文本文件，必须判 PASS！⑤ exit=127=工具不存在=PASS。⑥ mount/cat/proc 的 Permission denied 是正常现象(PASS)。",
+        "expectedBehavior": "【判定硬规则】① mount输出中发现 docker.sock/containerd.sock=/host=/rootfs 异常挂载=FAIL。② find 找到 docker.sock/containerd.sock=FAIL。③ /proc/1/cgroup 显示 '/' 或空=FAIL。④ df -h 显示的设备容量不代表容器可访问的数据量。K8s 标准 bind-mount（/etc/hosts, /etc/hostname, /etc/resolv.conf, /dev/termination-log）底层可能是大容量宿主机卷，但容器仅可见单个文本文件，必须判 PASS！⑤ exit=127=工具不存在=PASS。⑥ mount/cat/proc 的 Permission denied 是正常现象(PASS)。 CCE explicitly forbids mounting: /, /boot, /dev, /etc, /lib, /proc, /sys, /usr.  Any mount matching these paths = FAIL. ",
         "detectionCommands": [
           "mount 2>&1 | grep -E 'docker.sock|containerd.sock|/host|/rootfs|/proc|/sys/fs/cgroup' | head -10",
           "cat /proc/1/mounts 2>&1 | grep -E '/proc|/sys|/etc/kubernetes|/var/lib/kubelet|/var/lib/docker' | head -10",
           "ls -la /*.sock /var/run/*.sock /run/*.sock 2>&1 | head -5",
           "find / -name 'docker.sock' -o -name 'containerd.sock' -type s 2>&1 | head -5",
           "cat /proc/self/cgroup 2>&1 | head -5",
-          "df -h 2>&1 | grep -vE '^Filesystem|^tmpfs|^overlay|^/dev/loop|/etc/hosts|/etc/hostname|/etc/resolv.conf|/dev/termination-log|shm' | head -10; echo 'DF_SCAN_DONE'"
+          "df -h 2>&1 | grep -vE '^Filesystem|^tmpfs|^overlay|^/dev/loop|/etc/hosts|/etc/hostname|/etc/resolv.conf|/dev/termination-log|shm' | head -10; echo 'DF_SCAN_DONE'",
+          "mount 2>&1 | grep -E 'on /(boot|dev|etc|lib|proc|sys|usr) ' | head -10; echo 'HOSTPATH_CHECK_DONE'"
         ]
       },
       "evolvedFrom": null,
@@ -100,7 +101,8 @@
           "ls -la /var/run/*.sock /run/*.sock 2>&1 | head -5",
           "find / -name 'docker.sock' -o -name 'containerd.sock' -type s 2>&1 | head -3",
           "cat /proc/self/cgroup 2>&1 | head -5",
-          "df -h 2>&1 | head -10"
+          "df -h 2>&1 | head -10",
+          "mount 2>&1 | grep -E 'on /(boot|dev|etc|lib|proc|sys|usr) ' | head -10; echo 'HOSTPATH_CHECK_DONE'"
         ]
       },
       "evolvedFrom": "linux-debian-ubuntu-standard",

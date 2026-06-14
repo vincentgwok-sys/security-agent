@@ -48,7 +48,7 @@
         "whoami 2>&1"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则】① 发现SSH私钥文件(id_rsa,id_ecdsa等)=FAIL。② AWS/GCP凭证文件存在=FAIL。③ K8s SA Token存在=FAIL。④ /etc/shadow可读=FAIL。⑤ /etc/passwd可写=FAIL。⑥ sudo -n -l返回NOPASSWD=WARN。⑦ 用户在docker/root组=WARN。⑧ .git/config含password/token=FAIL。⑨ bash_history含密码或ssh命令=WARN。⑩ 通用密钥文件>5个=WARN，少量系统证书=PASS。exit=127=工具不存在=PASS。find的Permission denied是正常现象(PASS)。",
+        "expectedBehavior": "【判定硬规则】① 发现SSH私钥文件(id_rsa,id_ecdsa等)=FAIL。② AWS/GCP凭证文件存在=FAIL。③ K8s SA Token存在=FAIL。④ /etc/shadow可读=FAIL。⑤ /etc/passwd可写=FAIL。⑥ sudo -n -l返回NOPASSWD=WARN。⑦ 用户在docker/root组=WARN。⑧ .git/config含password/token=FAIL。⑨ bash_history含密码或ssh命令=WARN。⑩ 通用密钥文件>5个=WARN，少量系统证书=PASS。exit=127=工具不存在=PASS。find的Permission denied是正常现象(PASS)。 CCE 7.7: Secret file permissions MUST be 0400 (defaultMode=256).  Files with group/other permissions=WARN.  K8s >= 1.23 recommends Bound SA Token with expiration. ",
         "detectionCommands": [
           "for d in /root /home/*; do test -d $d/.ssh && find $d/.ssh -type f -name 'id_rsa' -o -name 'id_ecdsa' -o -name 'id_ed25519' -o -name '*.pem' 2>/dev/null | while read f; do echo 'SSH_KEY_FOUND:'$f; done; done; echo 'SSH_SCAN_DONE'",
           "for d in /root /home/*; do test -f $d/.aws/credentials && echo 'AWS_CRED_FOUND:'$d/.aws/credentials; done 2>/dev/null; echo 'AWS_SCAN_DONE'",
@@ -60,7 +60,9 @@
           "groups 2>&1 | grep -qE 'docker|root' && echo 'PRIV_GROUP_DETECTED' || echo 'PRIV_GROUP_SAFE'",
           "find / -name '.git' -type d -maxdepth 5 2>/dev/null | while read gd; do test -f $gd/config && grep -qiE 'password|token|credential' $gd/config && echo 'GIT_CRED_FOUND:'$gd/config; done; echo 'GIT_SCAN_DONE'",
           "for d in /root /home/*; do test -f $d/.bash_history && test -r $d/.bash_history && grep -iE 'password|passwd|login|ssh |scp ' $d/.bash_history 2>/dev/null | head -5 | grep . && echo 'BASH_HIST_SUSPICIOUS:'$d/.bash_history; done; echo 'HIST_SCAN_DONE'",
-          "find /home /root /var /etc /opt /app /srv -not -path '*/node_modules/*' -not -path '*/usr/lib/*' -name '*.key' -o -name '*.p12' -o -name '*.pfx' -o -name '*.jks' -o -name '*.keystore' -o -name '*.secret' -o -name '*.token' -o -name 'credential*' 2>/dev/null | head -20; echo 'SECRET_SCAN_DONE'"
+          "find /home /root /var /etc /opt /app /srv -not -path '*/node_modules/*' -not -path '*/usr/lib/*' -name '*.key' -o -name '*.p12' -o -name '*.pfx' -o -name '*.jks' -o -name '*.keystore' -o -name '*.secret' -o -name '*.token' -o -name 'credential*' 2>/dev/null | head -20; echo 'SECRET_SCAN_DONE'",
+          "find /var/run/secrets /etc/secrets /run/secrets -type f -perm /022 2>/dev/null | head -10; echo 'SECRET_PERM_CHECK_DONE'",
+          "find /var/run/secrets -type l -name 'token' 2>/dev/null | while read f; do ls -la \"$(dirname \"$f\")\" 2>&1; done; echo 'BOUND_TOKEN_CHECK_DONE'"
         ]
       },
       "evolvedFrom": null,
@@ -112,7 +114,8 @@
           "sudo -n -l 2>&1 | head -3; echo 'SUDO_EXIT:'$?",
           "groups 2>&1 | grep -qE 'docker|root' && echo 'PRIV_GROUP_DETECTED' || echo 'PRIV_GROUP_SAFE'",
           "find / -name '.git' -type d -maxdepth 5 2>/dev/null | while read gd; do test -f $gd/config && grep -qiE 'password|token' $gd/config && echo 'GIT_CRED:'$gd/config; done; echo 'GIT_DONE'",
-          "find /home /root /etc /opt /app -not -path '*/node_modules/*' -name '*.key' -o -name '*.pem' -o -name '*.secret' -o -name '*.token' 2>/dev/null | head -10; echo 'SECRET_DONE'"
+          "find /home /root /etc /opt /app -not -path '*/node_modules/*' -name '*.key' -o -name '*.pem' -o -name '*.secret' -o -name '*.token' 2>/dev/null | head -10; echo 'SECRET_DONE'",
+          "find /var/run/secrets /etc/secrets /run/secrets -type f -perm /022 2>/dev/null | head -10; echo 'SECRET_PERM_CHECK_DONE'"
         ]
       },
       "evolvedFrom": "linux-debian-ubuntu-standard",

@@ -13,12 +13,27 @@
       "contextId": "linux-debian-ubuntu-standard",
       "environmentFingerprint": {
         "osType": "linux",
-        "osFlavors": ["debian", "ubuntu"],
+        "osFlavors": [
+          "debian",
+          "ubuntu"
+        ],
         "shellType": "bash",
-        "requiredTools": ["cat", "grep", "nsenter"],
-        "optionalTools": ["unshare", "strace", "capsh", "bpftool"],
+        "requiredTools": [
+          "cat",
+          "grep",
+          "nsenter"
+        ],
+        "optionalTools": [
+          "unshare",
+          "strace",
+          "capsh",
+          "bpftool"
+        ],
         "minKernelVersion": "3.10.0",
-        "arch": ["amd64", "arm64"]
+        "arch": [
+          "amd64",
+          "arm64"
+        ]
       },
       "envCheckCommands": [
         "uname -s",
@@ -29,8 +44,10 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则】① nsenter/unshare exit≠0+stderr含Operation not permitted/Permission denied/EPERM=不允许的操作=PASS(安全)。② nsenter/unshare exit=0+输出ESCAPED=FAIL(逃逸成功)。③ Seccomp=2或1=PASS, Seccomp=0=FAIL。④ NoNewPrivs=1=PASS。⑤ CapEff=0000000000000000(全零)=PASS。⑥ /proc/sys/kernel/unprivileged_userns_clone 在 kernel 5.10+上可能不存在(file not found)=PASS(非漏洞)。⑦ /proc/sys/user/max_user_namespaces 的值是宿主机全局资源上限(默认约100万)，高值是正常默认值，仅作信息收集，绝不判FAIL。真正的 user namespace 检测依据是 unshare -U 命令的结果——若该命令已被拒绝(PASS)，则无论 max_user_namespaces 值多大容器都是安全的。⑧ exit=127=工具不存在=PASS。",
+        "expectedBehavior": "【判定硬规则】① nsenter/unshare exit≠0+stderr含Operation not permitted/Permission denied/EPERM=不允许的操作=PASS(安全)。② nsenter/unshare exit=0+输出ESCAPED=FAIL(逃逸成功)。③ Seccomp=2或1=PASS, Seccomp=0=FAIL。④ NoNewPrivs=1=PASS。⑤ CapEff=0000000000000000(全零)=PASS。⑥ /proc/sys/kernel/unprivileged_userns_clone 在 kernel 5.10+上可能不存在(file not found)=PASS(非漏洞)。⑦ /proc/sys/user/max_user_namespaces 的值是宿主机全局资源上限(默认约100万)，高值是正常默认值，仅作信息收集，绝不判FAIL。真正的 user namespace 检测依据是 unshare -U 命令的结果——若该命令已被拒绝(PASS)，则无论 max_user_namespaces 值多大容器都是安全的。⑧ exit=127=工具不存在=PASS。 AppArmor enabled(Y)=PASS(CCE 4.3 recommends). SELinux Enforcing=PASS.  Absent=WARN (increased attack surface). ",
         "detectionCommands": [
+          "test -f /sys/module/apparmor/parameters/enabled && cat /sys/module/apparmor/parameters/enabled 2>&1 && echo 'APPARMOR_ENABLED' || echo 'APPARMOR_NOT_FOUND'",
+          "getenforce 2>&1 || echo 'SELINUX_NOT_FOUND'",
           "cat /proc/1/status 2>&1 | grep -E '^Seccomp:'",
           "nsenter --mount=/proc/1/ns/mnt -- /bin/sh -c 'echo ESCAPED_TO_HOST_MNT_NS' 2>&1",
           "unshare -U /bin/sh -c 'echo ESCAPED_VIA_USERNS' 2>&1",
@@ -46,12 +63,23 @@
       "contextId": "linux-alpine-busybox",
       "environmentFingerprint": {
         "osType": "linux",
-        "osFlavors": ["alpine"],
+        "osFlavors": [
+          "alpine"
+        ],
         "shellType": "ash",
-        "requiredTools": ["cat", "grep"],
-        "optionalTools": ["nsenter", "unshare"],
+        "requiredTools": [
+          "cat",
+          "grep"
+        ],
+        "optionalTools": [
+          "nsenter",
+          "unshare"
+        ],
         "minKernelVersion": "3.10.0",
-        "arch": ["amd64", "arm64"]
+        "arch": [
+          "amd64",
+          "arm64"
+        ]
       },
       "envCheckCommands": [
         "uname -s",
@@ -62,8 +90,10 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "判定规则同 Debian 上下文全部规则。Alpine 可能无 nsenter/unshare（exit=127=PASS）。max_user_namespaces 高值=正常默认值=仅信息收集=绝不判 FAIL。核心判断依据：unshare -U 是否成功——被拒=PASS，成功=FAIL。",
+        "expectedBehavior": "判定规则同 Debian 上下文全部规则。Alpine 可能无 nsenter/unshare（exit=127=PASS）。max_user_namespaces 高值=正常默认值=仅信息收集=绝不判 FAIL。核心判断依据：unshare -U 是否成功——被拒=PASS，成功=FAIL。 AppArmor/SELinux absent=WARN.",
         "detectionCommands": [
+          "test -f /sys/module/apparmor/parameters/enabled && cat /sys/module/apparmor/parameters/enabled 2>&1 || echo 'APPARMOR_NOT_FOUND'",
+          "getenforce 2>&1 || echo 'SELINUX_NOT_FOUND'",
           "cat /proc/1/status 2>&1 | grep -E '^Seccomp:'",
           "cat /proc/self/status 2>&1 | grep -E 'CapEff|NoNewPrivs|Seccomp'",
           "cat /proc/sys/kernel/unprivileged_userns_clone 2>&1; cat /proc/sys/user/max_user_namespaces 2>&1; echo 'USRNS_INFO_ONLY'",
@@ -79,12 +109,20 @@
       "contextId": "windows-servercore-default",
       "environmentFingerprint": {
         "osType": "windows",
-        "osFlavors": ["windows-servercore", "windows-nanoserver"],
+        "osFlavors": [
+          "windows-servercore",
+          "windows-nanoserver"
+        ],
         "shellType": "powershell",
-        "requiredTools": ["powershell.exe", "reg.exe"],
+        "requiredTools": [
+          "powershell.exe",
+          "reg.exe"
+        ],
         "optionalTools": [],
         "minKernelVersion": "10.0.17763",
-        "arch": ["amd64"]
+        "arch": [
+          "amd64"
+        ]
       },
       "envCheckCommands": [
         "ver",

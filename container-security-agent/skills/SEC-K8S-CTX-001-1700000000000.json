@@ -13,12 +13,29 @@
       "contextId": "linux-debian-ubuntu-standard",
       "environmentFingerprint": {
         "osType": "linux",
-        "osFlavors": ["debian", "ubuntu"],
+        "osFlavors": [
+          "debian",
+          "ubuntu"
+        ],
         "shellType": "bash",
-        "requiredTools": ["capsh", "cat", "mount", "grep", "test"],
-        "optionalTools": ["getfattr", "attr", "nsenter", "unshare"],
+        "requiredTools": [
+          "capsh",
+          "cat",
+          "mount",
+          "grep",
+          "test"
+        ],
+        "optionalTools": [
+          "getfattr",
+          "attr",
+          "nsenter",
+          "unshare"
+        ],
         "minKernelVersion": "3.10.0",
-        "arch": ["amd64", "arm64"]
+        "arch": [
+          "amd64",
+          "arm64"
+        ]
       },
       "envCheckCommands": [
         "uname -s",
@@ -30,8 +47,9 @@
         "id 2>&1"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则】① exit=127=工具不存在=PASS(非漏洞)。② mount 失败+stderr含'Operation not permitted'/'Permission denied'/'必须以超级用户身份使用 mount'=PASS。③ mount 成功(exit=0)=FAIL。④ CapEff=ffffffff或含CAP_SYS_ADMIN(bit21)/CAP_SYS_PTRACE(bit19)=FAIL。⑤ Seccomp=2或1=PASS, Seccomp=0=FAIL。⑥ NoNewPrivs=1=PASS。⑦ cgroup/core_pattern/uevent_helper/module任一可写=FAIL(逃逸向量)。⑧ 发现块设备(/dev/sda等)=WARN(非必然FAIL)。⑨ uid=0+无user namespace=需关注。⑩ capsh --print中Current IAB含!cap_sys_admin等=PASS。",
+        "expectedBehavior": "【判定硬规则】① exit=127=工具不存在=PASS(非漏洞)。② mount 失败+stderr含'Operation not permitted'/'Permission denied'/'必须以超级用户身份使用 mount'=PASS。③ mount 成功(exit=0)=FAIL。④ CapEff=ffffffff或含CAP_SYS_ADMIN(bit21)/CAP_SYS_PTRACE(bit19)=FAIL。⑤ Seccomp=2或1=PASS, Seccomp=0=FAIL。⑥ NoNewPrivs=1=PASS。⑦ cgroup/core_pattern/uevent_helper/module任一可写=FAIL(逃逸向量)。⑧ 发现块设备(/dev/sda等)=WARN(非必然FAIL)。⑨ uid=0+无user namespace=需关注。⑩ capsh --print中Current IAB含!cap_sys_admin等=PASS。 hostNetwork/PID/IPC namespace shared=FAIL(CCE 5.3 section).  /proc/1/cgroup has 'privileged'=FAIL(CCE 5.3 forbids privileged containers).  allowPrivilegeEscalation=false=PASS, true=FAIL(CCE 5.3 section). ",
         "detectionCommands": [
+          "grep -qi 'privileged' /proc/1/cgroup 2>&1 && echo 'PRIVILEGED_MODE_DETECTED' || echo 'PRIVILEGED_MODE_SAFE'",
           "capsh --print 2>&1",
           "cat /proc/1/status 2>&1 | grep -E 'CapEff|Seccomp|NoNewPrivs'",
           "cat /proc/self/status 2>&1 | grep -E '^Uid:|^Gid:|CapEff|CapPrm|NoNewPrivs'",
@@ -41,7 +59,8 @@
           "test -w /sys/kernel/uevent_helper && echo 'UEVENT_HELPER_WRITABLE' || echo 'UEVENT_HELPER_SAFE' 2>&1",
           "test -d /sys/module && test -w /sys/module && echo 'MODULE_WRITABLE' || echo 'MODULE_SAFE' 2>&1",
           "for dev in /dev/sda /dev/sdb /dev/vda /dev/vdb /dev/mem /dev/kmem /dev/port; do test -b $dev -o -c $dev && echo 'DEV_EXPOSED:'$dev; done 2>&1",
-          "cat /proc/sys/kernel/unprivileged_userns_clone 2>&1; cat /proc/sys/user/max_user_namespaces 2>&1; echo 'USRNS_INFO_ONLY'"
+          "cat /proc/sys/kernel/unprivileged_userns_clone 2>&1; cat /proc/sys/user/max_user_namespaces 2>&1; echo 'USRNS_INFO_ONLY'",
+          "ls -la /proc/1/root/ 2>&1 | head -5; echo 'ROOTFS_ACCESS_CHECK_DONE'"
         ]
       },
       "evolvedFrom": null,
@@ -52,12 +71,24 @@
       "contextId": "linux-alpine-busybox",
       "environmentFingerprint": {
         "osType": "linux",
-        "osFlavors": ["alpine"],
+        "osFlavors": [
+          "alpine"
+        ],
         "shellType": "ash",
-        "requiredTools": ["cat", "grep", "mount", "test"],
-        "optionalTools": ["capsh"],
+        "requiredTools": [
+          "cat",
+          "grep",
+          "mount",
+          "test"
+        ],
+        "optionalTools": [
+          "capsh"
+        ],
         "minKernelVersion": "3.10.0",
-        "arch": ["amd64", "arm64"]
+        "arch": [
+          "amd64",
+          "arm64"
+        ]
       },
       "envCheckCommands": [
         "uname -s",
@@ -69,15 +100,17 @@
         "id 2>&1"
       ],
       "executionLogic": {
-        "expectedBehavior": "判定规则同 Debian 上下文全部。Alpine BusyBox mount/test行为可能不同但逻辑一致。cgroup/core_pattern可写=FAIL。",
+        "expectedBehavior": "判定规则同 Debian 上下文全部。Alpine BusyBox mount/test行为可能不同但逻辑一致。cgroup/core_pattern可写=FAIL。 privileged cgroup=FAIL, NoNewPrivs=0=FAIL.",
         "detectionCommands": [
+          "grep -qi 'privileged' /proc/1/cgroup 2>&1 && echo 'PRIVILEGED_MODE_DETECTED' || echo 'PRIVILEGED_MODE_SAFE'",
           "cat /proc/1/status 2>&1 | grep -E 'CapEff|Seccomp|NoNewPrivs'",
           "cat /proc/self/status 2>&1 | grep -E '^Uid:|CapEff|NoNewPrivs'",
           "mount -t tmpfs none /tmp/test_mount_csagent 2>&1; rmdir /tmp/test_mount_csagent 2>/dev/null; echo 'MOUNT_EXIT:'$?",
           "test -w /proc/sys/kernel/core_pattern && echo 'CORE_PATTERN_WRITABLE' || echo 'CORE_PATTERN_READONLY' 2>&1",
           "test -d /sys/fs/cgroup && test -w /sys/fs/cgroup && echo 'CGROUP_WRITABLE' || echo 'CGROUP_READONLY' 2>&1",
           "test -w /sys/kernel/uevent_helper && echo 'UEVENT_HELPER_WRITABLE' || echo 'UEVENT_HELPER_SAFE' 2>&1",
-          "for dev in /dev/sda /dev/sdb /dev/vda /dev/vdb /dev/mem /dev/kmem; do test -b $dev -o -c $dev && echo 'DEV_EXPOSED:'$dev; done 2>&1"
+          "for dev in /dev/sda /dev/sdb /dev/vda /dev/vdb /dev/mem /dev/kmem; do test -b $dev -o -c $dev && echo 'DEV_EXPOSED:'$dev; done 2>&1",
+          "ls -la /proc/1/root/ 2>&1 | head -3; echo 'ROOTFS_CHECK_DONE'"
         ]
       },
       "evolvedFrom": "linux-debian-ubuntu-standard",
@@ -88,12 +121,23 @@
       "contextId": "windows-servercore-default",
       "environmentFingerprint": {
         "osType": "windows",
-        "osFlavors": ["windows-servercore", "windows-nanoserver"],
+        "osFlavors": [
+          "windows-servercore",
+          "windows-nanoserver"
+        ],
         "shellType": "powershell",
-        "requiredTools": ["powershell.exe", "whoami.exe", "reg.exe"],
-        "optionalTools": ["docker.exe"],
+        "requiredTools": [
+          "powershell.exe",
+          "whoami.exe",
+          "reg.exe"
+        ],
+        "optionalTools": [
+          "docker.exe"
+        ],
         "minKernelVersion": "10.0.17763",
-        "arch": ["amd64"]
+        "arch": [
+          "amd64"
+        ]
       },
       "envCheckCommands": [
         "ver",
