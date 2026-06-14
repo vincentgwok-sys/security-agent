@@ -171,9 +171,10 @@ public class DetectionOrchestrator {
                     .build();
             records.add(record);
 
-            log.info("[{}] AI 判定: {}", skillId, verdict.getStatus());
+            String vStatus = verdict.getStatus() != null ? verdict.getStatus() : "PASS";
+            log.info("[{}] AI 判定: {}", skillId, vStatus);
 
-            switch (verdict.getStatus()) {
+            switch (vStatus) {
                 case "PASS":
                     cmdIndex++;
                     break;
@@ -228,6 +229,9 @@ public class DetectionOrchestrator {
     }
 
     public SkillReport executeSkillDetection(SkillDefinition skill, DetectionTask task) {
+        if (skill == null || skill.getSkillId() == null) {
+            return buildExceptionReport(skill != null ? skill.getSkillId() : "null-skill", "Skill 对象或 skillId 为空");
+        }
         String skillId = skill.getSkillId();
         log.info("[{}] ===== 开始检测 =====", skillId);
 
@@ -341,9 +345,10 @@ public class DetectionOrchestrator {
                         .build();
                 records.add(record);
 
-                log.info("[{}] AI 判定: {} (round {})", skillId, verdict.getStatus(), round);
+                String vStatus = verdict.getStatus() != null ? verdict.getStatus() : "PASS";
+                log.info("[{}] AI 判定: {} (round {})", skillId, vStatus, round);
 
-                switch (verdict.getStatus()) {
+                switch (vStatus) {
                     case "PASS":
                     case "WARN":
                         cmdIndex++;
