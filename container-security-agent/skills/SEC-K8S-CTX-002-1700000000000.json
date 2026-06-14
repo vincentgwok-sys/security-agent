@@ -46,7 +46,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则】① mount输出中发现 docker.sock/containerd.sock=/host=/rootfs 异常挂载=FAIL。② find 找到 docker.sock/containerd.sock=FAIL。③ /proc/1/cgroup 显示 '/' 或空=FAIL。④ df -h 显示的设备容量不代表容器可访问的数据量。K8s 标准 bind-mount（/etc/hosts, /etc/hostname, /etc/resolv.conf, /dev/termination-log）底层可能是大容量宿主机卷，但容器仅可见单个文本文件，必须判 PASS！⑤ exit=127=工具不存在=PASS。⑥ mount/cat/proc 的 Permission denied 是正常现象(PASS)。 CCE explicitly forbids mounting: /, /boot, /dev, /etc, /lib, /proc, /sys, /usr.  Any mount matching these paths = FAIL. ",
+        "expectedBehavior": "【判定硬规则】① mount输出中发现 docker.sock/containerd.sock=/host=/rootfs 异常挂载=FAIL。② find 找到 docker.sock/containerd.sock=FAIL。③ /proc/1/cgroup 显示 '/' 或空=FAIL。④ df -h 显示的设备容量不代表容器可访问的数据量。K8s 标准 bind-mount（/etc/hosts, /etc/hostname, /etc/resolv.conf, /dev/termination-log）底层可能是大容量宿主机卷，但容器仅可见单个文本文件，必须判 PASS！⑤ exit=127=工具不存在=PASS。⑥ mount/cat/proc 的 Permission denied 是正常现象(PASS)。 CCE explicitly forbids mounting: /, /boot, /dev, /etc, /lib, /proc, /sys, /usr.  Any mount matching these paths = FAIL.  HOSTPATH_CHECK: proc/sysfs/tmpfs/devtmpfs/cgroup 等内核虚拟文件系统是标准容器隔离文件系统，不是 hostPath 挂载，必须判 PASS。只有 ext4/xfs/btrfs/FUSE 等真实文件系统类型在禁止路径上才判 FAIL。",
         "detectionCommands": [
           "mount 2>&1 | grep -E 'docker.sock|containerd.sock|/host|/rootfs|/proc|/sys/fs/cgroup' | head -10",
           "cat /proc/1/mounts 2>&1 | grep -E '/proc|/sys|/etc/kubernetes|/var/lib/kubelet|/var/lib/docker' | head -10",
@@ -54,7 +54,7 @@
           "find / -name 'docker.sock' -o -name 'containerd.sock' -type s 2>&1 | head -5",
           "cat /proc/self/cgroup 2>&1 | head -5",
           "df -h 2>&1 | grep -vE '^Filesystem|^tmpfs|^overlay|^/dev/loop|/etc/hosts|/etc/hostname|/etc/resolv.conf|/dev/termination-log|shm' | head -10; echo 'DF_SCAN_DONE'",
-          "mount 2>&1 | grep -E 'on /(boot|dev|etc|lib|proc|sys|usr) ' | head -10; echo 'HOSTPATH_CHECK_DONE'"
+          "mount 2>&1 | grep -E 'on /(boot|dev|etc|lib|proc|sys|usr) ' | grep -vE 'type (proc|sysfs|tmpfs|devpts|devtmpfs|cgroup|cgroup2|mqueue|debugfs|tracefs|securityfs|pstore|bpf|fusectl|configfs)' | head -10; echo 'HOSTPATH_CHECK_DONE'"
         ]
       },
       "evolvedFrom": null,
@@ -94,7 +94,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "判定规则同 Debian 全部规则。Alpine BusyBox df/mount 输出格式可能不同。K8s bind-mount (/etc/hosts 等) 即便底层设备大容量也必须判 PASS。",
+        "expectedBehavior": "判定规则同 Debian 全部规则。Alpine BusyBox df/mount 输出格式可能不同。K8s bind-mount (/etc/hosts 等) 即便底层设备大容量也必须判 PASS。 HOSTPATH_CHECK: 标准内核虚拟文件系统(proc/sysfs/tmpfs等)必须判 PASS。",
         "detectionCommands": [
           "mount 2>&1 | head -20",
           "cat /proc/1/mounts 2>&1 | grep -E '/proc|/sys|/etc|/var' | head -10",
@@ -102,7 +102,7 @@
           "find / -name 'docker.sock' -o -name 'containerd.sock' -type s 2>&1 | head -3",
           "cat /proc/self/cgroup 2>&1 | head -5",
           "df -h 2>&1 | head -10",
-          "mount 2>&1 | grep -E 'on /(boot|dev|etc|lib|proc|sys|usr) ' | head -10; echo 'HOSTPATH_CHECK_DONE'"
+          "mount 2>&1 | grep -E 'on /(boot|dev|etc|lib|proc|sys|usr) ' | grep -vE 'type (proc|sysfs|tmpfs|devpts|devtmpfs|cgroup|cgroup2|mqueue|debugfs|tracefs|securityfs|pstore|bpf|fusectl|configfs)' | head -10; echo 'HOSTPATH_CHECK_DONE'"
         ]
       },
       "evolvedFrom": "linux-debian-ubuntu-standard",

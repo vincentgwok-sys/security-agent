@@ -51,7 +51,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "【判定硬规则】① 绝对禁止用 wget 做连通性检测。curl 不可用时直接 PASS。② curl exit=0+有内容=FAIL；exit=6=DNS失败=PASS；exit=7=连接被拒=PASS；exit=28=超时=PASS。③ exit=127=工具不存在=PASS。④ exit=1/2+Operation not permitted=PASS。⑤ 高危(FAIL)：curl 成功读取元数据且输出非空、ip route add 成功执行、环境变量含明文凭据。⑥ env var 检测仅作信息收集(WARN)，不判 FAIL。 EVOLVE: iptables/nft均不存在(127)时直接PASS，不尝试iptables-S/iptables-save等变体。 CCE 3.5: node-level iptables FORWARD must reject container->169.254.169.254 egress.  METADATA_BLOCK_RULES>0=PASS(node configured), =0=WARN(need NetworkPolicy). ",
+        "expectedBehavior": "【判定硬规则】① 绝对禁止用 wget 做连通性检测。curl 不可用时直接 PASS。② curl exit=0+有内容=FAIL；exit=6=DNS失败=PASS；exit=7=连接被拒=PASS；exit=28=超时=PASS。③ exit=127=工具不存在=PASS。④ exit=1/2+Operation not permitted=PASS。⑤ 高危(FAIL)：curl 成功读取元数据且输出非空、ip route add 成功执行、环境变量含明文凭据。⑥ env var 检测仅作信息收集(WARN)，不判 FAIL。 EVOLVE: iptables/nft均不存在(127)时直接PASS，不尝试iptables-S/iptables-save等变体。 CCE 3.5: node-level iptables FORWARD must reject container->169.254.169.254 egress.  METADATA_BLOCK_RULES>0=PASS(node configured), =0=WARN(need NetworkPolicy).  METADATA_BLOCK_RULES检测仅当iptables可用时有效。iptables不可用=IPTABLES_NOT_AVAILABLE=PASS(容器内通常无iptables，节点级规则应从宿主机检测)。METADATA_BLOCK_RULES>0=PASS(已配置)，=0且iptables可用=WARN。",
         "detectionCommands": [
           "ip route show 2>&1 | head -10",
           "cat /etc/resolv.conf 2>&1",
@@ -65,7 +65,7 @@
           "env 2>/dev/null | grep -iE 'password|secret|token|api_key|apikey|access_key|credentials|auth|passwd|jwt' | head -10; echo 'ENV_SECRET_EXIT:'$?",
           "env 2>/dev/null | grep -cE 'KUBERNETES_SERVICE|K8S_|KUBE_' | xargs -I{} echo 'K8S_ENV_COUNT:{}'",
           "getent hosts google.com 2>&1; echo 'DNS_EXIT:'$?",
-          "iptables -L FORWARD 2>&1 | grep -c '169.254.169.254' | xargs -I{} echo 'METADATA_BLOCK_RULES:{}'"
+          "command -v iptables >/dev/null 2>&1 && iptables -L FORWARD 2>&1 | grep -c '169.254.169.254' | xargs -I{} echo 'METADATA_BLOCK_RULES:{}' || echo 'IPTABLES_NOT_AVAILABLE'"
         ]
       },
       "evolvedFrom": null,
@@ -109,7 +109,7 @@
         "uname -m"
       ],
       "executionLogic": {
-        "expectedBehavior": "同 Debian 全部规则。env 在 Alpine 中可能为 BusyBox 实现，输出格式相同。xargs -I{} 可能在极简 Alpine 中不可用，EVOLVE 时用 sed 替代。 EVOLVE: iptables不存在直接PASS，不尝试其他变体。 METADATA_BLOCK_RULES>0=PASS, =0=WARN.",
+        "expectedBehavior": "同 Debian 全部规则。env 在 Alpine 中可能为 BusyBox 实现，输出格式相同。xargs -I{} 可能在极简 Alpine 中不可用，EVOLVE 时用 sed 替代。 EVOLVE: iptables不存在直接PASS，不尝试其他变体。 METADATA_BLOCK_RULES>0=PASS, =0=WARN. METADATA_BLOCK_RULES检测仅当iptables可用时有效。iptables不可用=IPTABLES_NOT_AVAILABLE=PASS(容器内通常无iptables，节点级规则应从宿主机检测)。METADATA_BLOCK_RULES>0=PASS(已配置)，=0且iptables可用=WARN。",
         "detectionCommands": [
           "cat /etc/resolv.conf 2>&1",
           "ip route show 2>&1 | head -10",
@@ -120,7 +120,7 @@
           "O=$(curl --connect-timeout 3 -sk https://kubernetes.default.svc.cluster.local 2>&1); R=$?; echo \"$O\" | head -3; echo \"K8S_API_EXIT:$R\"",
           "ss -tlnp 2>&1 | head -10",
           "env 2>/dev/null | grep -iE 'password|secret|token|api_key|apikey|access_key|credentials|auth|passwd|jwt' | head -10; echo 'ENV_SECRET_EXIT:'$?",
-          "iptables -L FORWARD 2>&1 | grep -c '169.254.169.254' | xargs -I{} echo 'METADATA_BLOCK_RULES:{}'"
+          "command -v iptables >/dev/null 2>&1 && iptables -L FORWARD 2>&1 | grep -c '169.254.169.254' | xargs -I{} echo 'METADATA_BLOCK_RULES:{}' || echo 'IPTABLES_NOT_AVAILABLE'"
         ]
       },
       "evolvedFrom": "linux-debian-ubuntu-standard",
